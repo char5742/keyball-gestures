@@ -1,6 +1,4 @@
-package event
-
-import "syscall"
+package consts
 
 // イベントタイプの定数（input-event-codes.hより）
 const (
@@ -27,11 +25,3 @@ const (
 	BtnTouch      = 0x14a // タッチイベント
 	BtnToolFinger = 0x145 // 指によるタッチ
 )
-
-// Event は入力イベントを表す構造体
-type Event struct {
-	Time  syscall.Timeval // イベント発生時刻
-	Type  uint16          // イベントタイプ
-	Code  uint16          // イベントコード
-	Value int32           // イベント値
-}

@@ -1,4 +1,4 @@
-package device
+package consts
 
 // UIInput デバイスの定数（uinput.hから）
 const (
@@ -19,22 +19,3 @@ const (
 	PropButtonpad = 0x02       // ボタンパッドプロパティ
 	SetPropBit    = 0x4004556a // プロパティビット設定用のIOCTL
 )
-
-// InputID はデバイス識別子を表す構造体
-type InputID struct {
-	Bustype uint16 // バスタイプ
-	Vendor  uint16 // ベンダーID
-	Product uint16 // 製品ID
-	Version uint16 // バージョン
-}
-
-// UserDev はuinputユーザーデバイスの設定を表す構造体
-type UserDev struct {
-	Name       [MaxNameSize]byte // デバイス名
-	ID         InputID           // デバイス識別子
-	EffectsMax uint32            // 最大エフェクト数
-	Absmax     [AbsSize]int32    // 絶対座標の最大値
-	Absmin     [AbsSize]int32    // 絶対座標の最小値
-	Absfuzz    [AbsSize]int32    // 絶対座標のファジー値
-	Absflat    [AbsSize]int32    // 絶対座標のフラット値
-}
