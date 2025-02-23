@@ -25,6 +25,15 @@ const (
 
 	twoFingerKey  = 184 // F14
 	fourFingerKey = 183 // F13
+
+	// モーションフィルター
+
+	// 左右の移動を滑らかにするための係数
+	// 0.0-1.0の範囲。1.0に近いほど滑らかになりますが、遅延が大きくなります
+	motionFilterSmoothingFactor = 0.85
+	// フィルターが動作し始めるまでのカウント
+	// この値が大きいとフィルターが動作し始めるまでの時間が長くなります
+	motionFilterWarmUpCount = 10
 )
 
 const maxFingers = 4
@@ -77,7 +86,7 @@ func main() {
 		grabbed         bool
 	)
 
-	motionFilter := features.NewMotionFilter(0.85, 10)
+	motionFilter := features.NewMotionFilter(motionFilterSmoothingFactor, motionFilterWarmUpCount)
 
 	for {
 		pressedKey := keyboard.GetKey()
