@@ -11,10 +11,12 @@ import (
 )
 
 const (
-	minX = 0
-	maxX = 7680
-	minY = 0
-	maxY = 7680
+	minX          = 0
+	maxX          = 7680
+	minY          = 0
+	maxY          = 7680
+	twoFingerKey  = 184 // F14
+	fourFingerKey = 183 // F13
 )
 
 const maxFingers = 4
@@ -75,7 +77,7 @@ func main() {
 		dx, dy := motionFilter.Filter(dxRaw, dyRaw)
 
 		switch {
-		case pressedKey == 184 && fingerCount == 0:
+		case pressedKey == twoFingerKey && fingerCount == 0:
 			if !grabbed {
 				mouse.Grab()
 				grabbed = true
@@ -85,7 +87,7 @@ func main() {
 			initFingers(padDevice, &fingerPositions, fingerCount, maxX/2, maxY/2)
 			prevKey = pressedKey
 
-		case pressedKey == 183 && fingerCount == 0:
+		case pressedKey == fourFingerKey && fingerCount == 0:
 			if !grabbed {
 				mouse.Grab()
 				grabbed = true
@@ -95,7 +97,7 @@ func main() {
 			initFingers(padDevice, &fingerPositions, fingerCount, maxX/2, maxY/2)
 			prevKey = pressedKey
 
-		case (pressedKey == 183 || pressedKey == 184) && fingerCount > 0:
+		case (pressedKey == fourFingerKey || pressedKey == twoFingerKey) && fingerCount > 0:
 			if pressedKey == prevKey {
 				for i := 0; i < fingerCount; i++ {
 					fingerPositions[i].x += dx
