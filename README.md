@@ -42,9 +42,12 @@ sudo ./main
 const (
     // 仮想タッチパッドの範囲設定
     minX = 0
-    maxX = 7680
+    maxX = 32767
     minY = 0
-    maxY = 7680
+    maxY = 32767
+
+    // マウスの移動量係数設定
+    mouseDeltaFactor = 15
 
     // トリガーキーの設定
     twoFingerKey  = 184 // F14
@@ -53,6 +56,9 @@ const (
     // モーションフィルターの設定
     motionFilterSmoothingFactor = 0.85
     motionFilterWarmUpCount = 10
+
+    // スクロールをリセットするまでの時間設定
+	resetThreshold = 50 * time.Millisecond
 )
 ```
 

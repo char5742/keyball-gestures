@@ -12,13 +12,14 @@ import (
 
 const (
 	// 仮想タッチパッドの範囲
-	// この値は小さいと一度に動かせる距離が小さくなり
-	// 大きいと移動速度が小さくなります
 
 	minX = 0
-	maxX = 7680
+	maxX = 32767
 	minY = 0
-	maxY = 7680
+	maxY = 32767
+
+	// マウスの移動量を調整する係数
+	mouseDeltaFactor = 15
 
 	// ジェスチャーをトリガーするためのキーコード
 	// これらのキーを押しながらマウスを動かすと仮想タッチパッドが動きます
@@ -34,6 +35,9 @@ const (
 	// フィルターが動作し始めるまでのカウント
 	// この値が大きいとフィルターが動作し始めるまでの時間が長くなります
 	motionFilterWarmUpCount = 10
+
+	// スクロールをリセットするまでの時間
+	resetThreshold = 50 * time.Millisecond
 )
 
 const maxFingers = 4
@@ -84,6 +88,7 @@ func main() {
 		fingerPositions [maxFingers]struct{ x, y int32 }
 		prevKey         int32
 		grabbed         bool
+		lastScrollTime  time.Time
 	)
 
 	motionFilter := features.NewMotionFilter(motionFilterSmoothingFactor, motionFilterWarmUpCount)
@@ -91,7 +96,20 @@ func main() {
 	for {
 		pressedKey := keyboard.GetKey()
 		dxRaw, dyRaw := mouse.GetMouseDelta()
-		dx, dy := motionFilter.Filter(dxRaw, dyRaw)
+		dx, dy := motionFilter.Filter(dxRaw*mouseDeltaFactor, dyRaw*mouseDeltaFactor)
+		// print finger positions 1
+		fmt.Printf("Positions: x: %v, y: %v\n", fingerPositions[0].x, fingerPositions[0].y)
+
+		now := time.Now()
+
+		// 何も動いていない場合、最後のスクロールから閾値を超えていればリセット
+		// これにより、タッチパッドの範囲内で無限にスクロールが可能
+		if now.Sub(lastScrollTime) > resetThreshold && fingerCount > 0 {
+			liftAllFingers(padDevice, fingerCount)
+			motionFilter.Reset()
+			initFingers(padDevice, &fingerPositions, fingerCount, maxX/2, maxY/2)
+		}
+		lastScrollTime = now
 
 		switch {
 		case pressedKey == twoFingerKey && fingerCount == 0:
