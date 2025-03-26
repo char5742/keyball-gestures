@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -8,11 +9,11 @@ import (
 	"time"
 
 	"github.com/char5742/keyball-gestures/internal/features"
+	"github.com/char5742/keyball-gestures/internal/gui"
 )
 
 const (
 	// 仮想タッチパッドの範囲
-
 	minX = 0
 	maxX = 32767
 	minY = 0
@@ -43,46 +44,92 @@ const (
 const maxFingers = 4
 
 func main() {
+	// コマンドライン引数の解析
+	useGui := flag.Bool("gui", false, "GUIモードで起動します")
+	flag.Parse()
+
+	// シグナルハンドラの設定
 	handleSignals()
 
-	// Create virtual touchpad device
+	// root権限チェック
+	if os.Geteuid() != 0 {
+		fmt.Println("エラー: このアプリケーションはルート権限で実行する必要があります")
+		os.Exit(1)
+	}
+
+	// GUIモードかCLIモードかを判断
+	if *useGui {
+		// GUIモードで実行
+		fmt.Println("GUIモードで起動します...")
+		gui.RunGUI()
+	} else {
+		// CLIモードで実行
+		fmt.Println("CLIモードで起動します...")
+		runCLI()
+	}
+}
+
+// CLIモードでの実行
+func runCLI() {
+	// 仮想タッチパッドデバイスの作成
 	padDevice, err := features.CreateTouchPad("/dev/uinput", []byte("VirtualTouchPad"), minX, maxX, minY, maxY)
 	if err != nil {
-		panic(fmt.Errorf("仮想タッチパッドの作成に失敗しました: %w", err))
+		fmt.Printf("仮想タッチパッドの作成に失敗しました: %v\n", err)
+		os.Exit(1)
 	}
 	defer padDevice.Close()
 
+	// デバイス一覧の取得
 	devices, err := features.GetDevices()
-
 	if err != nil {
-		panic(fmt.Errorf("デバイス一覧の取得に失敗しました: %w", err))
+		fmt.Printf("デバイス一覧の取得に失敗しました: %v\n", err)
+		os.Exit(1)
 	}
 
-	// 理想はデバイス一覧からターゲットを選択させたいが、
-	// とりあえず最初のマウスとキーボードを使う
+	// 最初のマウスとキーボードを使用
 	var mouseDevice *features.Device
 	var keyboardDevice *features.Device
 	for _, device := range devices {
-		if device.Type == features.DeviceTypeMouse {
+		if device.Type == features.DeviceTypeMouse && mouseDevice == nil {
 			mouseDevice = &device
-
-		} else if device.Type == features.DeviceTypeKeyboard {
+		} else if device.Type == features.DeviceTypeKeyboard && keyboardDevice == nil {
 			keyboardDevice = &device
 		}
 	}
 
+	if mouseDevice == nil {
+		fmt.Println("エラー: マウスデバイスが見つかりませんでした")
+		os.Exit(1)
+	}
+	if keyboardDevice == nil {
+		fmt.Println("エラー: キーボードデバイスが見つかりませんでした")
+		os.Exit(1)
+	}
+
+	fmt.Printf("使用するキーボード: %s\n", keyboardDevice.Name)
+	fmt.Printf("使用するマウス: %s\n", mouseDevice.Name)
+
+	// マウスとキーボードデバイスを開く
 	mouse, err := features.CreateMouse(mouseDevice.Path)
 	if err != nil {
-		panic(fmt.Errorf("対象のマウスに対してオブジェクトの生成に失敗しました[path=%s]: %w", mouseDevice.Path, err))
+		fmt.Printf("マウスデバイスのオープンに失敗しました[path=%s]: %v\n", mouseDevice.Path, err)
+		os.Exit(1)
 	}
 	defer mouse.Close()
 
 	keyboard, err := features.CreateKeyboard(keyboardDevice.Path)
 	if err != nil {
-		panic(fmt.Errorf("failed to create keyboard device: %w", err))
+		fmt.Printf("キーボードデバイスのオープンに失敗しました: %v\n", err)
+		os.Exit(1)
 	}
 	defer keyboard.Close()
 
+	// ジェスチャー認識のメインループ
+	runGestureLoop(padDevice, keyboard, mouse)
+}
+
+// ジェスチャー認識のメインループ
+func runGestureLoop(padDevice features.TouchPad, keyboard features.Keyboard, mouse features.Mouse) {
 	var (
 		fingerCount     int
 		fingerPositions [maxFingers]struct{ x, y int32 }
@@ -93,12 +140,12 @@ func main() {
 
 	motionFilter := features.NewMotionFilter(motionFilterSmoothingFactor, motionFilterWarmUpCount)
 
+	fmt.Println("ジェスチャー認識を開始しました...")
+
 	for {
 		pressedKey := keyboard.GetKey()
 		dxRaw, dyRaw := mouse.GetMouseDelta()
 		dx, dy := motionFilter.Filter(dxRaw*mouseDeltaFactor, dyRaw*mouseDeltaFactor)
-		// print finger positions 1
-		fmt.Printf("Positions: x: %v, y: %v\n", fingerPositions[0].x, fingerPositions[0].y)
 
 		now := time.Now()
 
@@ -117,7 +164,7 @@ func main() {
 				mouse.Grab()
 				grabbed = true
 			}
-			fmt.Println("2-finger operation triggered")
+			fmt.Println("2本指ジェスチャー開始")
 			fingerCount = 2
 			initFingers(padDevice, &fingerPositions, fingerCount, maxX/2, maxY/2)
 			prevKey = pressedKey
@@ -127,7 +174,7 @@ func main() {
 				mouse.Grab()
 				grabbed = true
 			}
-			fmt.Println("4-finger operation triggered")
+			fmt.Println("4本指ジェスチャー開始")
 			fingerCount = 4
 			initFingers(padDevice, &fingerPositions, fingerCount, maxX/2, maxY/2)
 			prevKey = pressedKey
@@ -157,6 +204,7 @@ func main() {
 			}
 			if fingerCount > 0 {
 				liftAllFingers(padDevice, fingerCount)
+				fmt.Println("ジェスチャー終了")
 				fingerCount = 0
 			}
 			if pressedKey != 0 {
@@ -193,7 +241,7 @@ func handleSignals() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		fmt.Println("Shutting down...")
+		fmt.Println("シャットダウンします...")
 		os.Exit(0)
 	}()
 }
