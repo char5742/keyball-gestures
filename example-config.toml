@@ -1,0 +1,36 @@
+# Keyball Gestures 設定ファイル
+
+# 仮想タッチパッドの設定
+[touchpad]
+min_x = 0
+max_x = 32767
+min_y = 0
+max_y = 32767
+
+# キー入力の設定
+[input]
+# F14キー(184)を2本指ジェスチャーのトリガーとして使用
+two_finger_key = 184
+# F13キー(183)を4本指ジェスチャーのトリガーとして使用
+four_finger_key = 183
+
+# モーション制御の設定
+[motion]
+# 0.0-1.0の範囲。1.0に近いほど滑らかになりますが、遅延が大きくなります
+filter_smoothing_factor = 0.85
+# フィルターが動作し始めるまでのカウント
+filter_warm_up_count = 10
+# マウス移動量の調整係数
+mouse_delta_factor = 15
+
+# ジェスチャー認識の設定
+[gesture]
+# スクロールをリセットするまでの時間 (ミリ秒)
+reset_threshold = 50
+
+# デバイス設定
+[device_prefs]
+# 優先するキーボードデバイス名 (空白の場合は自動検出)
+preferred_keyboard_device = ""
+# 優先するマウスデバイス名 (空白の場合は自動検出)
+preferred_mouse_device = ""

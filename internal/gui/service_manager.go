@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"github.com/char5742/keyball-gestures/internal/config"
 	"github.com/char5742/keyball-gestures/internal/features"
 )
 
@@ -200,20 +201,20 @@ func (sm *ServiceManager) runServiceLoop() error {
 
 	// モーションフィルタの作成
 	sm.motionFilter = features.NewMotionFilter(
-		config.MotionFilterFactor,
-		config.MotionFilterWarmUpCount,
+		config.Motion.FilterSmoothingFactor,
+		config.Motion.FilterWarmUpCount,
 	)
 
 	sm.Log("ジェスチャーサービスを初期化しました")
 	sm.Log(fmt.Sprintf("2本指スワイプキー: %d, 4本指スワイプキー: %d",
-		config.TwoFingerKey, config.FourFingerKey))
+		config.Input.TwoFingerKey, config.Input.FourFingerKey))
 
 	// ジェスチャーループ
 	return sm.gestureLoop(config)
 }
 
 // gestureLoop はジェスチャー認識のメインループ
-func (sm *ServiceManager) gestureLoop(config Config) error {
+func (sm *ServiceManager) gestureLoop(config *config.Config) error {
 	const maxFingers = 4
 
 	var (
@@ -224,7 +225,7 @@ func (sm *ServiceManager) gestureLoop(config Config) error {
 		lastScrollTime  time.Time
 	)
 
-	resetThreshold := time.Duration(config.ResetThresholdMillisec) * time.Millisecond
+	resetThreshold := config.Gesture.ResetThreshold
 
 	// Monitor用
 	lastDx, lastDy := int32(0), int32(0)
@@ -237,7 +238,7 @@ func (sm *ServiceManager) gestureLoop(config Config) error {
 			// キー状態とマウス移動を取得
 			pressedKey := sm.keyboardDevice.GetKey()
 			dxRaw, dyRaw := sm.mouseDevice.GetMouseDelta()
-			dx, dy := sm.motionFilter.Filter(dxRaw*int32(config.MouseDeltaFactor), dyRaw*int32(config.MouseDeltaFactor))
+			dx, dy := sm.motionFilter.Filter(dxRaw*int32(config.Motion.MouseDeltaFactor), dyRaw*int32(config.Motion.MouseDeltaFactor))
 
 			// モニタ更新（有意な変化があった場合のみ）
 			if dx != 0 || dy != 0 {
@@ -261,7 +262,7 @@ func (sm *ServiceManager) gestureLoop(config Config) error {
 
 			// ジェスチャー開始/更新/終了処理
 			switch {
-			case pressedKey == int32(config.TwoFingerKey) && fingerCount == 0:
+			case pressedKey == int32(config.Input.TwoFingerKey) && fingerCount == 0:
 				if !grabbed {
 					sm.mouseDevice.Grab()
 					grabbed = true
@@ -271,7 +272,7 @@ func (sm *ServiceManager) gestureLoop(config Config) error {
 				prevKey = pressedKey
 				sm.Log("2本指ジェスチャー開始")
 
-			case pressedKey == int32(config.FourFingerKey) && fingerCount == 0:
+			case pressedKey == int32(config.Input.FourFingerKey) && fingerCount == 0:
 				if !grabbed {
 					sm.mouseDevice.Grab()
 					grabbed = true
@@ -281,7 +282,7 @@ func (sm *ServiceManager) gestureLoop(config Config) error {
 				prevKey = pressedKey
 				sm.Log("4本指ジェスチャー開始")
 
-			case (pressedKey == int32(config.TwoFingerKey) || pressedKey == int32(config.FourFingerKey)) && fingerCount > 0:
+			case (pressedKey == int32(config.Input.TwoFingerKey) || pressedKey == int32(config.Input.FourFingerKey)) && fingerCount > 0:
 				if pressedKey == prevKey {
 					// フィンガー移動
 					for i := 0; i < fingerCount; i++ {

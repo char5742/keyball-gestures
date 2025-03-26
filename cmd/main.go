@@ -5,40 +5,13 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
+	"github.com/char5742/keyball-gestures/internal/config"
 	"github.com/char5742/keyball-gestures/internal/features"
 	"github.com/char5742/keyball-gestures/internal/gui"
-)
-
-const (
-	// 仮想タッチパッドの範囲
-	minX = 0
-	maxX = 32767
-	minY = 0
-	maxY = 32767
-
-	// マウスの移動量を調整する係数
-	mouseDeltaFactor = 15
-
-	// ジェスチャーをトリガーするためのキーコード
-	// これらのキーを押しながらマウスを動かすと仮想タッチパッドが動きます
-
-	twoFingerKey  = 184 // F14
-	fourFingerKey = 183 // F13
-
-	// モーションフィルター
-
-	// 左右の移動を滑らかにするための係数
-	// 0.0-1.0の範囲。1.0に近いほど滑らかになりますが、遅延が大きくなります
-	motionFilterSmoothingFactor = 0.85
-	// フィルターが動作し始めるまでのカウント
-	// この値が大きいとフィルターが動作し始めるまでの時間が長くなります
-	motionFilterWarmUpCount = 10
-
-	// スクロールをリセットするまでの時間
-	resetThreshold = 50 * time.Millisecond
 )
 
 const maxFingers = 4
@@ -46,16 +19,38 @@ const maxFingers = 4
 func main() {
 	// コマンドライン引数の解析
 	useGui := flag.Bool("gui", false, "GUIモードで起動します")
+	configPath := flag.String("config", "", "設定ファイルのパス (指定しない場合はデフォルトパスを使用)")
 	flag.Parse()
+
+	// デフォルト設定ファイルパスの設定
+	defaultConfigPath := ""
+	configDir, err := os.UserConfigDir()
+	if err == nil {
+		defaultConfigPath = filepath.Join(configDir, "keyball-gestures", "config.toml")
+	}
+
+	// 設定ファイルパスの決定
+	cfgPath := defaultConfigPath
+	if *configPath != "" {
+		cfgPath = *configPath
+	}
+
+	// 設定ファイルの読み込み
+	var cfg *config.Config
+	if cfgPath != "" {
+		cfg, err = config.LoadConfig(cfgPath)
+		if err != nil {
+			fmt.Printf("設定ファイルの読み込みに失敗しました: %v\nデフォルト設定を使用します\n", err)
+			cfg = config.DefaultConfig()
+		} else {
+			fmt.Printf("設定ファイルを読み込みました: %s\n", cfgPath)
+		}
+	} else {
+		cfg = config.DefaultConfig()
+	}
 
 	// シグナルハンドラの設定
 	handleSignals()
-
-	// root権限チェック
-	if os.Geteuid() != 0 {
-		fmt.Println("エラー: このアプリケーションはルート権限で実行する必要があります")
-		os.Exit(1)
-	}
 
 	// GUIモードかCLIモードかを判断
 	if *useGui {
@@ -65,14 +60,15 @@ func main() {
 	} else {
 		// CLIモードで実行
 		fmt.Println("CLIモードで起動します...")
-		runCLI()
+		runCLI(cfg)
 	}
 }
 
 // CLIモードでの実行
-func runCLI() {
+func runCLI(cfg *config.Config) {
 	// 仮想タッチパッドデバイスの作成
-	padDevice, err := features.CreateTouchPad("/dev/uinput", []byte("VirtualTouchPad"), minX, maxX, minY, maxY)
+	padDevice, err := features.CreateTouchPad("/dev/uinput", []byte("VirtualTouchPad"),
+		cfg.TouchPad.MinX, cfg.TouchPad.MaxX, cfg.TouchPad.MinY, cfg.TouchPad.MaxY)
 	if err != nil {
 		fmt.Printf("仮想タッチパッドの作成に失敗しました: %v\n", err)
 		os.Exit(1)
@@ -125,11 +121,11 @@ func runCLI() {
 	defer keyboard.Close()
 
 	// ジェスチャー認識のメインループ
-	runGestureLoop(padDevice, keyboard, mouse)
+	runGestureLoop(padDevice, keyboard, mouse, cfg)
 }
 
 // ジェスチャー認識のメインループ
-func runGestureLoop(padDevice features.TouchPad, keyboard features.Keyboard, mouse features.Mouse) {
+func runGestureLoop(padDevice features.TouchPad, keyboard features.Keyboard, mouse features.Mouse, cfg *config.Config) {
 	var (
 		fingerCount     int
 		fingerPositions [maxFingers]struct{ x, y int32 }
@@ -138,55 +134,55 @@ func runGestureLoop(padDevice features.TouchPad, keyboard features.Keyboard, mou
 		lastScrollTime  time.Time
 	)
 
-	motionFilter := features.NewMotionFilter(motionFilterSmoothingFactor, motionFilterWarmUpCount)
+	motionFilter := features.NewMotionFilter(cfg.Motion.FilterSmoothingFactor, cfg.Motion.FilterWarmUpCount)
 
 	fmt.Println("ジェスチャー認識を開始しました...")
 
 	for {
 		pressedKey := keyboard.GetKey()
 		dxRaw, dyRaw := mouse.GetMouseDelta()
-		dx, dy := motionFilter.Filter(dxRaw*mouseDeltaFactor, dyRaw*mouseDeltaFactor)
+		dx, dy := motionFilter.Filter(dxRaw*int32(cfg.Motion.MouseDeltaFactor), dyRaw*int32(cfg.Motion.MouseDeltaFactor))
 
 		now := time.Now()
 
 		// 何も動いていない場合、最後のスクロールから閾値を超えていればリセット
 		// これにより、タッチパッドの範囲内で無限にスクロールが可能
-		if now.Sub(lastScrollTime) > resetThreshold && fingerCount > 0 {
+		if now.Sub(lastScrollTime) > cfg.Gesture.ResetThreshold && fingerCount > 0 {
 			liftAllFingers(padDevice, fingerCount)
 			motionFilter.Reset()
-			initFingers(padDevice, &fingerPositions, fingerCount, maxX/2, maxY/2)
+			initFingers(padDevice, &fingerPositions, fingerCount, cfg.TouchPad.MaxX/2, cfg.TouchPad.MaxY/2)
 		}
 		lastScrollTime = now
 
 		switch {
-		case pressedKey == twoFingerKey && fingerCount == 0:
+		case pressedKey == int32(cfg.Input.TwoFingerKey) && fingerCount == 0:
 			if !grabbed {
 				mouse.Grab()
 				grabbed = true
 			}
 			fmt.Println("2本指ジェスチャー開始")
 			fingerCount = 2
-			initFingers(padDevice, &fingerPositions, fingerCount, maxX/2, maxY/2)
+			initFingers(padDevice, &fingerPositions, fingerCount, cfg.TouchPad.MaxX/2, cfg.TouchPad.MaxY/2)
 			prevKey = pressedKey
 
-		case pressedKey == fourFingerKey && fingerCount == 0:
+		case pressedKey == int32(cfg.Input.FourFingerKey) && fingerCount == 0:
 			if !grabbed {
 				mouse.Grab()
 				grabbed = true
 			}
 			fmt.Println("4本指ジェスチャー開始")
 			fingerCount = 4
-			initFingers(padDevice, &fingerPositions, fingerCount, maxX/2, maxY/2)
+			initFingers(padDevice, &fingerPositions, fingerCount, cfg.TouchPad.MaxX/2, cfg.TouchPad.MaxY/2)
 			prevKey = pressedKey
 
-		case (pressedKey == fourFingerKey || pressedKey == twoFingerKey) && fingerCount > 0:
+		case (pressedKey == int32(cfg.Input.FourFingerKey) || pressedKey == int32(cfg.Input.TwoFingerKey)) && fingerCount > 0:
 			if pressedKey == prevKey {
 				for i := 0; i < fingerCount; i++ {
 					fingerPositions[i].x += dx
 					fingerPositions[i].y += dy
 
-					fingerPositions[i].x = clamp(fingerPositions[i].x, minX, maxX)
-					fingerPositions[i].y = clamp(fingerPositions[i].y, minY, maxY)
+					fingerPositions[i].x = clamp(fingerPositions[i].x, cfg.TouchPad.MinX, cfg.TouchPad.MaxX)
+					fingerPositions[i].y = clamp(fingerPositions[i].y, cfg.TouchPad.MinY, cfg.TouchPad.MaxY)
 
 					_ = padDevice.MultiTouchMove(i, fingerPositions[i].x, fingerPositions[i].y)
 				}
