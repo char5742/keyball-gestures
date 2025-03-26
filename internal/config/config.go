@@ -8,6 +8,16 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// GetDefaultConfigDir はデフォルトの設定ディレクトリのパスを返す
+func GetDefaultConfigDir() (string, error) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(configDir, "keyball-gestures")
+	return path, nil
+}
+
 // Config はアプリケーション全体の設定を表す構造体
 type Config struct {
 	TouchPad    TouchPadConfig    `toml:"touchpad"`
