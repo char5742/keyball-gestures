@@ -31,6 +31,9 @@ func NewApp() *App {
 	a.configManager = NewConfigManager(a)
 	a.serviceManager = NewServiceManager(a, a.deviceManager, a.configManager)
 
+	// DeviceManagerにConfigManagerを設定
+	a.deviceManager.SetConfigManager(a.configManager)
+
 	return a
 }
 

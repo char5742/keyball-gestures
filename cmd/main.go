@@ -82,15 +82,46 @@ func runCLI(cfg *config.Config) {
 		os.Exit(1)
 	}
 
-	// 最初のマウスとキーボードを使用
+	// 設定ファイルで指定された優先デバイスまたは最初のマウスとキーボードを使用
 	var mouseDevice *features.Device
 	var keyboardDevice *features.Device
+
+	// 優先デバイスの名前
+	preferredKeyboard := cfg.DevicePrefs.PreferredKeyboardDevice
+	preferredMouse := cfg.DevicePrefs.PreferredMouseDevice
+
+	// 最初に見つかったデバイスを初期値として保存
+	var firstMouseDevice *features.Device
+	var firstKeyboardDevice *features.Device
+
 	for _, device := range devices {
-		if device.Type == features.DeviceTypeMouse && mouseDevice == nil {
-			mouseDevice = &device
-		} else if device.Type == features.DeviceTypeKeyboard && keyboardDevice == nil {
-			keyboardDevice = &device
+		if device.Type == features.DeviceTypeMouse {
+			// 最初のマウスを記録
+			if firstMouseDevice == nil {
+				firstMouseDevice = &device
+			}
+			// 優先マウスが指定されており、名前が一致するか確認
+			if preferredMouse != "" && device.Name == preferredMouse {
+				mouseDevice = &device
+			}
+		} else if device.Type == features.DeviceTypeKeyboard {
+			// 最初のキーボードを記録
+			if firstKeyboardDevice == nil {
+				firstKeyboardDevice = &device
+			}
+			// 優先キーボードが指定されており、名前が一致するか確認
+			if preferredKeyboard != "" && device.Name == preferredKeyboard {
+				keyboardDevice = &device
+			}
 		}
+	}
+
+	// 優先デバイスが見つからなかった場合は最初のデバイスを使用
+	if mouseDevice == nil {
+		mouseDevice = firstMouseDevice
+	}
+	if keyboardDevice == nil {
+		keyboardDevice = firstKeyboardDevice
 	}
 
 	if mouseDevice == nil {
