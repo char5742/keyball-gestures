@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/char5742/keyball-gestures/internal/api"
 	"github.com/char5742/keyball-gestures/internal/config"
+	"github.com/pkg/browser" // 追加
 )
 
 func main() {
@@ -67,10 +69,25 @@ func runApiServer(cfg *config.Config, port int) {
 	// APIサーバーを作成
 	server := api.NewServer(cfg, port)
 
-	// サーバー起動
-	if err := server.Start(); err != nil {
-		log.Fatalf("APIサーバーの起動に失敗しました: %v", err)
+	// サーバー起動をゴルーチンで行う
+	go func() {
+		if err := server.Start(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("APIサーバーの起動に失敗しました: %v", err)
+		}
+	}()
+
+	// 少し待ってからブラウザを開く（サーバーが完全に起動するのを待つため）
+	// time.Sleep(1 * time.Second) // 必要に応じて調整
+
+	// デフォルトブラウザで http://localhost:{port} を開く
+	url := fmt.Sprintf("http://localhost:%d", port)
+	fmt.Printf("ブラウザで %s を開いています...\n", url)
+	if err := browser.OpenURL(url); err != nil {
+		log.Printf("ブラウザの自動起動に失敗しました: %v\n手動で %s を開いてください。\n", err, url)
 	}
+
+	// シグナルが来るまで待機（終了処理はhandleSignals内で行われる）
+	select {}
 }
 
 // CLIモードでの実行

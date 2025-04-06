@@ -2,14 +2,19 @@ package api
 
 import (
 	"context"
+	"embed" // 追加
 	"encoding/json"
 	"fmt"
+	"io/fs" // 追加
 	"log"
-	"net/http"
+	"net/http" // 追加
 	"sync"
 
 	"github.com/char5742/keyball-gestures/internal/config"
 )
+
+//go:embed static
+var staticFiles embed.FS // 修正: staticディレクトリを埋め込む
 
 // Server はAPIサーバーを表す構造体
 type Server struct {
@@ -32,8 +37,20 @@ func (s *Server) Start() error {
 	// ルーターの設定
 	router := http.NewServeMux()
 
-	// APIエンドポイントの設定
-	s.setupRoutes(router)
+	// 静的ファイルを提供するためのファイルシステムを作成
+	// "static" サブディレクトリをルートとする
+	staticFS, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		log.Fatalf("埋め込みファイルシステムのサブディレクトリ作成に失敗しました: %v", err)
+	}
+	// 静的ファイルサーバーハンドラ
+	fsHandler := http.FileServer(http.FS(staticFS))
+
+	// ルートパス ("/") へのリクエストで index.html を提供
+	router.Handle("/static/", http.StripPrefix("/static/", fsHandler))
+
+	// APIエンドポイントの設定 (APIルートは "/" より優先されるように後で設定)
+	s.setupRoutes(router) // この関数は internal/api/routes.go にあると仮定
 
 	// HTTPサーバーの設定
 	s.server = &http.Server{

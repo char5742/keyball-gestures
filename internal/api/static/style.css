@@ -1,0 +1,379 @@
+/* モダンでラインを強調したAppleデザイン */
+
+:root {
+    --accent-blue: #0071e3;
+    --accent-green: #34c759;
+    --accent-red: #ff3b30;
+    --accent-yellow: #ffcc00;
+    --accent-purple: #af52de;
+    --text-primary: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --bg-primary: #f5f5f7;
+    --bg-secondary: #ffffff;
+    --border-color: #e2e2e2;
+    --transition-standard: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+}
+
+/* カード・セクションスタイル */
+.card {
+    background-color: var(--bg-secondary);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--border-color);
+    transition: var(--transition-standard);
+}
+
+.card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    border-bottom: 1px solid var(--border-color);
+    padding: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.card-body {
+    padding: 1.5rem;
+}
+
+.card-footer {
+    border-top: 1px solid var(--border-color);
+    padding: 1.25rem;
+}
+
+/* モダンボタンスタイル - 塗りつぶしではなくライン・アクセント重視 */
+button, .btn {
+    background-color: transparent;
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    font-weight: 500;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-standard);
+    position: relative;
+    overflow: hidden;
+}
+
+button:hover, .btn:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+button:active, .btn:active {
+    transform: scale(0.98);
+}
+
+/* アクションボタン - アイコンが色付き、背景は白 */
+.btn-action {
+    padding: 0.5rem;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-action i {
+    font-size: 1rem;
+}
+
+/* アクセントカラー - 大部分は白背景にアイコンやボーダーに色を使用 */
+.accent-blue, .btn-blue i {
+    color: var(--accent-blue);
+}
+
+.accent-green, .btn-green i {
+    color: var(--accent-green);
+}
+
+.accent-red, .btn-red i {
+    color: var(--accent-red);
+}
+
+.accent-yellow, .btn-yellow i {
+    color: var(--accent-yellow);
+}
+
+.accent-purple, .btn-purple i {
+    color: var(--accent-purple);
+}
+
+/* プライマリーアクションのみ色付き背景 */
+.btn-primary {
+    background-color: var(--accent-blue);
+    color: white;
+    border: none;
+}
+
+/* ライン（下線）によるアクセント */
+.line-accent {
+    position: relative;
+}
+
+.line-accent::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+}
+
+.line-accent:hover::after {
+    transform: scaleX(1);
+}
+
+/* ステータスインジケーター - ライン型 */
+.status-line {
+    height: 3px;
+    width: 100%;
+    margin: 0.5rem 0;
+    position: relative;
+    background-color: var(--border-color);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.status-line::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 0;
+    transition: width 0.5s ease;
+}
+
+.status-line.running::before {
+    width: 100%;
+    background-color: var(--accent-green);
+    animation: pulse-bg 2s infinite;
+}
+
+.status-line.error::before {
+    width: 100%;
+    background-color: var(--accent-red);
+}
+
+.status-line.partial::before {
+    width: 60%;
+    background-color: var(--accent-yellow);
+}
+
+/* ステータスドット - サイズ小さく */
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+}
+
+.status-dot.running {
+    background-color: var(--accent-green);
+    animation: pulse-opacity 2s infinite;
+}
+
+.status-dot.error {
+    background-color: var(--accent-red);
+}
+
+.status-dot.idle {
+    background-color: var(--accent-yellow);
+}
+
+/* フォームコントロール */
+input, select, textarea {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.75rem;
+    font-size: 1rem;
+    width: 100%;
+    background-color: var(--bg-secondary);
+    transition: var(--transition-standard);
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.15);
+}
+
+/* デバイス一覧の個々のアイテム */
+.device-item {
+    padding: 0.875rem;
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background-color: var(--bg-secondary);
+    transition: var(--transition-standard);
+    position: relative;
+    overflow: hidden;
+}
+
+.device-item:hover {
+    background-color: rgba(0, 0, 0, 0.01);
+    border-color: rgba(0, 0, 0, 0.15);
+}
+
+.device-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 3px;
+}
+
+.device-item.keyboard::before {
+    background-color: var(--accent-purple);
+}
+
+.device-item.mouse::before {
+    background-color: var(--accent-yellow);
+}
+
+.device-item.other::before {
+    background-color: var(--text-secondary);
+}
+
+/* デバイスリストコンテナ */
+#devicesList {
+    background-color: rgba(245, 245, 247, 0.6);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    padding: 0.5rem;
+    max-height: 65vh;
+    overflow-y: auto;
+}
+
+/* アニメーション定義 */
+@keyframes pulse-opacity {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+@keyframes pulse-bg {
+    0% { background-color: var(--accent-green); }
+    50% { background-color: rgba(52, 199, 89, 0.7); }
+    100% { background-color: var(--accent-green); }
+}
+
+@keyframes slide-in {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* 直感的なトースト通知 */
+.toast {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-width: 320px;
+    backdrop-filter: blur(10px);
+    transform: translateY(-20px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    z-index: 9999;
+    border-left: 4px solid var(--accent-blue);
+    font-size: 0.9rem;
+}
+
+.toast.success {
+    border-left-color: var(--accent-green);
+}
+
+.toast.error {
+    border-left-color: var(--accent-red);
+}
+
+.toast.show {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+/* 直感的なローダー - ミニマルデザイン */
+.loader {
+    width: 20px;
+    height: 2px;
+    background: var(--border-color);
+    position: relative;
+    overflow: hidden;
+    border-radius: 2px;
+    margin: 0 auto;
+}
+
+.loader:after {
+    content: '';
+    width: 40%;
+    height: 100%;
+    background: var(--accent-blue);
+    position: absolute;
+    top: 0;
+    left: -40%;
+    border-radius: 2px;
+    animation: loading 1s ease-in-out infinite;
+}
+
+@keyframes loading {
+    0% { left: -40%; }
+    100% { left: 100%; }
+}
+
+/* アクセシビリティ向上 */
+.focus-visible:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent-blue);
+}
+
+/* リスト項目アニメーション */
+.list-item {
+    animation: slide-in 0.3s ease forwards;
+    opacity: 0;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+    .card {
+        border-radius: 12px;
+    }
+    
+    .btn-action {
+        width: 32px;
+        height: 32px;
+    }
+}

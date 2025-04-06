@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keyball Gestures</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div id="toast-container"></div>
+
+    <div class="container mx-auto px-4 py-6 max-w-5xl">
+        <header class="mb-8 flex flex-col items-center">
+            <div class="flex items-center mb-1">
+                <i class="fas fa-keyboard text-2xl accent-blue"></i>
+            </div>
+            <h1 class="text-2xl font-semibold mb-1">Keyball Gestures</h1>
+            
+            <!-- ステータスインジケーター - ラインタイプ -->
+            <div class="w-20 status-line" id="status-line-indicator"></div>
+        </header>
+
+        <div class="grid gap-6 mb-8">
+            <!-- サービスコントロールパネル -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="flex items-center">
+                        <span class="status-dot" id="status-dot-indicator"></span>
+                        <span id="serviceStatus" class="text-sm font-medium">読み込み中...</span>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="startServiceBtn" class="btn btn-action btn-green" title="サービス開始">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button id="stopServiceBtn" class="btn btn-action btn-red" title="サービス停止">
+                            <i class="fas fa-stop"></i>
+                        </button>
+                        <button id="getServiceStatusBtn" class="btn btn-action btn-blue" title="状態確認">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- デバイス管理 -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="flex items-center">
+                        <i class="fas fa-keyboard mr-2 accent-purple"></i>
+                        <h2 class="font-medium">デバイス</h2>
+                    </div>
+                    <button id="getDevicesBtn" class="btn btn-action btn-blue" title="デバイス情報取得">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="card-body">
+                    <!-- デバイス一覧 -->
+                    <div id="devicesList" class="mb-5 max-h-60 overflow-auto"></div>
+                    
+                    <!-- 優先デバイス設定 -->
+                    <div class="bg-gray-50 p-4 rounded-xl">
+                        <div class="grid md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="flex items-center mb-2 text-sm" for="keyboardDeviceSelect">
+                                    <i class="fas fa-keyboard mr-2 accent-purple"></i>
+                                    <span>キーボード</span>
+                                </label>
+                                <select id="keyboardDeviceSelect" class="w-full"></select>
+                            </div>
+                            <div>
+                                <label class="flex items-center mb-2 text-sm" for="mouseDeviceSelect">
+                                    <i class="fas fa-mouse mr-2 accent-yellow"></i>
+                                    <span>マウス</span>
+                                </label>
+                                <select id="mouseDeviceSelect" class="w-full"></select>
+                            </div>
+                        </div>
+                        <button id="setPreferredDevicesBtn" class="btn w-full">
+                            <i class="fas fa-save mr-2 accent-blue"></i>
+                            <span>設定を保存</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 設定管理 -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="flex items-center">
+                        <i class="fas fa-sliders-h mr-2 accent-blue"></i>
+                        <h2 class="font-medium">設定</h2>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="getConfigBtn" class="btn btn-action btn-blue" title="設定取得">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button id="saveConfigBtn" class="btn btn-action btn-green" title="設定保存">
+                            <i class="fas fa-save"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <textarea id="configDisplay" rows="10" class="font-mono text-sm mb-4" placeholder="設定情報"></textarea>
+                    <button id="updateConfigBtn" class="btn w-full">
+                        <i class="fas fa-upload mr-2 accent-blue"></i>
+                        <span>適用</span>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- システム状態 -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="flex items-center">
+                        <i class="fas fa-heartbeat mr-2 accent-red"></i>
+                        <h2 class="font-medium">システム状態</h2>
+                    </div>
+                    <button id="healthCheckBtn" class="btn btn-action btn-blue" title="状態確認">
+                        <i class="fas fa-stethoscope"></i>
+                    </button>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-2">
+                        <span id="healthStatus" class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100">
+                            <span class="status-dot" id="health-dot-indicator"></span>
+                            <span>確認中...</span>
+                        </span>
+                    </div>
+                    <p class="text-xs text-gray-500">最終確認: <span id="lastChecked">--</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="py-4 text-center text-xs text-gray-400">
+        <p>Keyball Gestures Controller</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
