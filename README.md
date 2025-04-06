@@ -15,7 +15,7 @@ Keyball GesturesはLinux環境でMacOSライクなマウスジェスチャーを
 - 滑らかな動作を実現するモーションフィルター搭載
 - デバイスの自動再接続機能（切断・再接続時に自動で復帰）
 - デバイスの健全性チェック機能（定期的にデバイスの状態を確認）
-- APIインターフェースによる外部アプリケーション（例: Flutterフロントエンド）との連携
+- APIインターフェースおよびWeb UIによる設定・管理
 - キーボードとマウスの自動検出および優先デバイス設定
 - 設定ファイルによるカスタマイズ
 
@@ -34,7 +34,37 @@ Keyball GesturesはLinux環境でMacOSライクなマウスジェスチャーを
 ```sh
 curl -sSL https://raw.githubusercontent.com/char5742/keyball-gestures/main/scripts/install.sh | bash
 ```
-インストール後、`keyball-gestures` サービスが自動で起動します。
+インストール後、アプリケーションは `/usr/local/bin/keyball-gestures` に配置されます。
+udevルールが設定され、ユーザーが `input` グループに追加されます（グループ変更を有効にするには再ログインが必要な場合があります）。
+
+**アプリケーションの起動:**
+
+インストールスクリプトはsystemdサービスを登録しないため、アプリケーションを手動で起動する必要があります。
+`input` グループへの所属が有効になっていれば、`sudo` なしで実行できるはずです。
+
+*   **CLIモード (デフォルト) で起動:**
+    ```sh
+    keyball-gestures
+    ```
+
+*   **APIモード (Web UI付き) で起動:**
+    ```sh
+    keyball-gestures --api
+    ```
+    デフォルトではポート `8080` で起動し、Web UI (`http://localhost:8080`) がブラウザで自動的に開かれます。
+
+*   **オプションを指定して起動:**
+    ```sh
+    # APIモードで、異なるポートと設定ファイルパスを指定
+    keyball-gestures --api --port 9000 --config /path/to/your/custom-config.toml
+
+    # CLIモードで、設定ファイルパスを指定
+    keyball-gestures --config /path/to/your/custom-config.toml
+    ```
+
+    利用可能なオプションの詳細は「使用方法 (手動ビルドの場合)」セクションを参照してください。
+
+![Web UI サンプル画面](images/ui.png)
 
 ### 方法2: 手動ビルド
 
@@ -76,8 +106,8 @@ sudo ./main
 ```
 
 ### APIモード
-HTTPサーバーを起動し、RESTful APIを通じてサービスの制御や設定の管理が可能になります。
-Flutterフロントエンドとの連携を想定しています。
+HTTPサーバーを起動し、Web UI (ブラウザで `http://localhost:{port}` を開く) またはRESTful APIを通じてサービスの制御や設定の管理が可能になります。
+APIモードで起動すると、デフォルトブラウザで自動的にWeb UIが開かれます。
 
 ```sh
 sudo ./main --api --port 8080
@@ -144,7 +174,7 @@ preferred_mouse_device = ""    # 例: "Logicool"
 - **デバイス検出**: キーボードとマウスは自動検出されます。複数接続されている場合、デフォルトでは最初に見つかったデバイスが使用されますが、設定ファイルで優先デバイスを指定できます。
 - **自動再接続**: デバイスが切断された場合、自動的に再接続を試みます。この機能はサービス内で有効/無効を切り替え可能です（API経由での制御は未実装）。
 - **健全性チェック**: 定期的にデバイスの応答を確認し、問題があれば再接続を試みます。
-- **APIモード**: APIモードで起動すると、HTTP経由で外部アプリケーションからサービスを制御できます。
+- **APIモード**: APIモードで起動すると、Web UIまたはHTTP経由で外部アプリケーションからサービスを制御できます。
 
 ## ライセンス
 
@@ -161,7 +191,8 @@ MIT
     ├── api/             # APIサーバー実装
     │   ├── server.go    # サーバー本体
     │   ├── routes.go    # APIルート定義
-    │   └── service.go   # ジェスチャーサービス
+    │   ├── service.go   # ジェスチャーサービス
+    │   └── static/      # Web UI (HTML, CSS, JS)
     ├── config/          # 設定関連
     ├── consts/          # 定数定義
     ├── features/        # 主要機能実装
