@@ -180,6 +180,12 @@ preferred_mouse_device = ""    # 例: "Logicool"
 
 MIT
 
+## サポート
+
+このプロジェクトを気に入っていただけましたら、GitHub Sponsorsを通じてサポートしていただけると嬉しいです。皆様のサポートは、このプロジェクトの継続的な開発と改善に役立ちます。
+
+[![GitHub Sponsor](https://img.shields.io/badge/sponsor-30363D?style=for-the-badge&logo=GitHub-Sponsors&logoColor=#EA4AAA)](https://github.com/sponsors/char5742)
+
 ## 開発者向け情報
 
 プロジェクトの構造:
@@ -198,3 +204,4 @@ MIT
     ├── features/        # 主要機能実装
     ├── types/           # 型定義
     └── utils/           # ユーティリティ関数
+```
