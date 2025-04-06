@@ -13,8 +13,10 @@ Keyball GesturesはLinux環境でMacOSライクなマウスジェスチャーを
 
 - 2本指/4本指スワイプジェスチャーのエミュレーション
 - 滑らかな動作を実現するモーションフィルター搭載
-- APIインターフェースによるFlutterフロントエンドとの連携
-- キーボードとマウスの自動検出
+- デバイスの自動再接続機能（切断・再接続時に自動で復帰）
+- デバイスの健全性チェック機能（定期的にデバイスの状態を確認）
+- APIインターフェースによる外部アプリケーション（例: Flutterフロントエンド）との連携
+- キーボードとマウスの自動検出および優先デバイス設定
 - 設定ファイルによるカスタマイズ
 
 ## 動作環境
@@ -25,25 +27,40 @@ Keyball GesturesはLinux環境でMacOSライクなマウスジェスチャーを
 
 ## インストール
 
+### 方法1: スクリプトを使用 (推奨)
+
+インストールスクリプトを実行すると、ビルドと必要な設定（udevルール、systemdサービス）が自動で行われます。
+
+```sh
+curl -sSL https://raw.githubusercontent.com/char5742/keyball-gestures/main/scripts/install.sh | bash
+```
+インストール後、`keyball-gestures` サービスが自動で起動します。
+
+### 方法2: 手動ビルド
+
 ```sh
 git clone https://github.com/char5742/keyball-gestures.git
 cd keyball-gestures
 go build cmd/main.go
 ```
+この場合、udevルールの設定やサービスの登録は手動で行う必要があります。
 
-## 使用方法
+## 使用方法 (手動ビルドの場合)
 
-1. rootユーザー権限で実行:
-```sh
-Usage:
-  xhost +SI:localuser:root
-  sudo DISPLAY=:1 ./main [options]
+1.  **root権限で実行**:
+    仮想デバイス(`/dev/uinput`)を作成・アクセスするためにroot権限が必要です。
 
-Options:
-  --api         APIサーバーモードで起動します（デフォルトはCLIモード）
-  --port        APIサーバーのポート番号（デフォルト: 8080）
-  --config      設定ファイルのパス（指定しない場合はデフォルトパスを使用）
-```
+    ```sh
+    sudo ./main [options]
+    ```
+
+    **オプション**:
+    ```
+    Options:
+      --api         APIサーバーモードで起動します（デフォルトはCLIモード）
+      --port int    APIサーバーのポート番号（デフォルト: 8080）
+      --config string 設定ファイルのパス（指定しない場合はデフォルトパスを使用）
+    ```
 
 2. ジェスチャー操作:
    - **2本指スワイプ**: F14キーを押しながらトラックボール操作
@@ -68,48 +85,66 @@ sudo ./main --api --port 8080
 
 #### 主なAPIエンドポイント
 
-- `GET /api/config` - 現在の設定を取得
-- `PUT /api/config` - 設定を更新
-- `GET /api/devices` - 利用可能なデバイス一覧を取得
-- `POST /api/service/start` - ジェスチャー認識サービスを開始
-- `POST /api/service/stop` - ジェスチャー認識サービスを停止
-- `GET /api/service/status` - サービスの状態を確認
+- **設定**:
+    - `GET /api/config`: 現在の設定を取得
+    - `PUT /api/config`: 設定を更新 (メモリ上)
+    - `POST /api/config/save`: 現在の設定を指定パスまたはデフォルトパスに保存
+- **デバイス**:
+    - `GET /api/devices`: 利用可能なデバイス一覧を取得
+    - `PUT /api/devices/preferred`: 優先するキーボード/マウスデバイスを設定
+- **サービス**:
+    - `POST /api/service/start`: ジェスチャー認識サービスを開始
+    - `POST /api/service/stop`: ジェスチャー認識サービスを停止
+    - `GET /api/service/status`: サービスの状態を確認 (running/stopped)
+- **その他**:
+    - `GET /api/health`: サーバーのヘルスチェック
 
 ## 設定ファイル
 
-デフォルトでは `~/.config/keyball-gestures/config.toml` に設定ファイルが作成されます。
-以下のパラメータが設定可能です：
+設定はTOML形式で行います。設定ファイルのデフォルトパスは `~/.config/keyball-gestures/config.toml` です。
+初回起動時や設定ファイルが存在しない場合は、デフォルト設定で動作します。
+設定例については `example-config.toml` を参照してください。
 
 ```toml
+# example-config.toml の内容例
+
+# 仮想タッチパッドの解像度
 [touchpad]
 min_x = 0
 max_x = 32767
 min_y = 0
 max_y = 32767
 
+# ジェスチャーを発動するためのキーコード (evtestなどで確認可能)
 [input]
-two_finger_key = 184  # F14
-four_finger_key = 183  # F13
+two_finger_key = 184  # 例: F14キー
+four_finger_key = 183 # 例: F13キー
 
+# マウス移動のスムージングと感度設定
 [motion]
-filter_smoothing_factor = 0.85
-filter_warm_up_count = 10
-mouse_delta_factor = 15
+filter_smoothing_factor = 0.85 # スムージング係数 (0.0 - 1.0)
+filter_warm_up_count = 10      # スムージング開始までのウォームアップ回数
+mouse_delta_factor = 15        # マウス移動量の倍率
 
+# ジェスチャーのリセット閾値 (この時間操作がないと指の位置をリセット)
 [gesture]
 reset_threshold = "50ms"
 
+# 優先デバイス設定 (デバイス名の一部を指定)
+# 空欄の場合は最初に見つかったデバイスを使用
 [device_prefs]
-preferred_keyboard_device = ""
-preferred_mouse_device = ""
+preferred_keyboard_device = "" # 例: "Keychron"
+preferred_mouse_device = ""    # 例: "Logicool"
 ```
 
 ## 注意事項
 
-- rootユーザー権限が必要です（/dev/uinputへのアクセスのため）
-- 現在のところ、Pop!_OS COSMICでの動作を主に確認しています
-- キーボードとマウスは自動で検出されますが、複数接続されている場合は最初に見つかったデバイスが使用されます
-- APIモードでは、任意のFlutterアプリからHTTP経由でサービスを制御できます
+- **root権限**: 仮想デバイス(`/dev/uinput`)の作成・アクセスにroot権限が必要です。インストールスクリプトを使用すると、udevルールにより一般ユーザーでの実行が可能になる場合があります。
+- **対応OS**: 主にPop!_OS COSMICでテストされていますが、他のLinuxディストリビューションでも動作する可能性があります。
+- **デバイス検出**: キーボードとマウスは自動検出されます。複数接続されている場合、デフォルトでは最初に見つかったデバイスが使用されますが、設定ファイルで優先デバイスを指定できます。
+- **自動再接続**: デバイスが切断された場合、自動的に再接続を試みます。この機能はサービス内で有効/無効を切り替え可能です（API経由での制御は未実装）。
+- **健全性チェック**: 定期的にデバイスの応答を確認し、問題があれば再接続を試みます。
+- **APIモード**: APIモードで起動すると、HTTP経由で外部アプリケーションからサービスを制御できます。
 
 ## ライセンス
 
