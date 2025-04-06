@@ -2,19 +2,19 @@ package api
 
 import (
 	"context"
-	"embed" // 追加
+	"embed"
 	"encoding/json"
 	"fmt"
-	"io/fs" // 追加
+	"io/fs"
 	"log"
-	"net/http" // 追加
+	"net/http"
 	"sync"
 
 	"github.com/char5742/keyball-gestures/internal/config"
 )
 
 //go:embed static
-var staticFiles embed.FS // 修正: staticディレクトリを埋め込む
+var staticFiles embed.FS
 
 // Server はAPIサーバーを表す構造体
 type Server struct {
@@ -46,11 +46,9 @@ func (s *Server) Start() error {
 	// 静的ファイルサーバーハンドラ
 	fsHandler := http.FileServer(http.FS(staticFS))
 
-	// ルートパス ("/") へのリクエストで index.html を提供
 	router.Handle("/static/", http.StripPrefix("/static/", fsHandler))
 
-	// APIエンドポイントの設定 (APIルートは "/" より優先されるように後で設定)
-	s.setupRoutes(router) // この関数は internal/api/routes.go にあると仮定
+	s.setupRoutes(router)
 
 	// HTTPサーバーの設定
 	s.server = &http.Server{

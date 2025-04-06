@@ -80,7 +80,7 @@ func runApiServer(cfg *config.Config, port int) {
 	// time.Sleep(1 * time.Second) // 必要に応じて調整
 
 	// デフォルトブラウザで http://localhost:{port} を開く
-	url := fmt.Sprintf("http://localhost:%d", port)
+	url := fmt.Sprintf("http://localhost:%d/static/", port)
 	fmt.Printf("ブラウザで %s を開いています...\n", url)
 	if err := browser.OpenURL(url); err != nil {
 		log.Printf("ブラウザの自動起動に失敗しました: %v\n手動で %s を開いてください。\n", err, url)
