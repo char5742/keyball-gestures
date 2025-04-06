@@ -1,0 +1,70 @@
+name: Release Go Binary
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # Trigger on version tags like v1.0.0
+
+permissions:
+  contents: write # Needed to create releases and upload assets
+
+jobs:
+  build:
+    name: Build Go Binary
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux]
+        goarch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24' # Specify your Go version
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          # CGO_ENABLED=0 is often needed for cross-compilation, especially if your code uses C libraries indirectly.
+          # If your GUI part requires CGO, you might need a more complex setup (e.g., using cross-compilers).
+          # For a simple CLI tool or one using pure Go GUI libs, CGO_ENABLED=0 is usually fine.
+          CGO_ENABLED: 0
+        run: |
+          APP_NAME="keyball-gestures" # Match the name used in install.sh
+          BINARY_NAME="${APP_NAME}-${GOARCH}"
+          go build -v -ldflags="-s -w" -o "${BINARY_NAME}" ./cmd/main.go
+          echo "Built ${BINARY_NAME}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: keyball-gestures-${{ matrix.goarch }}
+          path: keyball-gestures-${{ matrix.goarch }}
+
+  create-release:
+    name: Create GitHub Release with gh CLI
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts # Download all artifacts to a directory
+
+      - name: List downloaded artifacts
+        run: ls -R artifacts
+
+      - name: Create Release and Upload Assets with gh CLI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }} # Get the tag name like v1.0.0
+        run: |
+          gh release create "$TAG" \
+             --title "Release $TAG" \
+             --notes "Release notes for $TAG" \
+             artifacts/keyball-gestures-amd64/keyball-gestures-amd64 \
+             artifacts/keyball-gestures-arm64/keyball-gestures-arm64
