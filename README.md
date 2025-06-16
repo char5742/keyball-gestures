@@ -1,6 +1,6 @@
 # Keyball Gestures
 
-Keyball GesturesはLinux環境でMacOSライクなマウスジェスチャーを実現するツールです。Keyballのトラックボールとキーの組み合わせで、直感的なワークスペース操作を可能にします。
+Keyball GesturesはLinux/macOS環境でマルチタッチジェスチャーを実現するツールです。Keyballのトラックボールとキーの組み合わせで、直感的なワークスペース操作を可能にします。
 
 ## ドキュメント
 
@@ -11,23 +11,32 @@ Keyball GesturesはLinux環境でMacOSライクなマウスジェスチャーを
 
 ## 特徴
 
+- **クロスプラットフォーム対応**: Linux/macOSで動作
 - 2本指/4本指スワイプジェスチャーのエミュレーション
 - 滑らかな動作を実現するモーションフィルター搭載
-- デバイスの自動再接続機能（切断・再接続時に自動で復帰）
-- デバイスの健全性チェック機能（定期的にデバイスの状態を確認）
+- デバイスの自動再接続機能（切断・再接続時に自動で復帰）※Linux版
+- デバイスの健全性チェック機能（定期的にデバイスの状態を確認）※Linux版
 - APIインターフェースおよびWeb UIによる設定・管理
 - キーボードとマウスの自動検出および優先デバイス設定
 - 設定ファイルによるカスタマイズ
+- **macOS版の特徴**:
+  - Quartz Event APIによるネイティブなジェスチャー実装
+  - システム全体でのジェスチャー認識（Event Tap使用）
+  - Mission ControlやApp Exposeとの統合
 
 ## 動作環境
 
-- **OS**: Pop!_OS COSMIC alpha 6（他のLinuxディストリビューションでも動作する可能性あり）
+- **OS**: 
+  - Linux: Pop!_OS COSMIC alpha 6（他のLinuxディストリビューションでも動作する可能性あり）
+  - macOS: 13 Ventura以降（アクセシビリティ権限が必要）
 - **必須デバイス**: Keyball
 - **Go**: version 1.24.0 以上
 
 ## インストール
 
-### 方法1: スクリプトを使用 (推奨)
+### Linux
+
+#### 方法1: スクリプトを使用 (推奨)
 
 インストールスクリプトを実行すると、ビルドと必要な設定（udevルール、systemdサービス）が自動で行われます。
 
@@ -36,6 +45,24 @@ curl -sSL https://raw.githubusercontent.com/char5742/keyball-gestures/main/scrip
 ```
 インストール後、アプリケーションは `/usr/local/bin/keyball-gestures` に配置されます。
 udevルールが設定され、ユーザーが `input` グループに追加されます（グループ変更を有効にするには再ログインが必要な場合があります）。
+
+### macOS
+
+#### 方法1: Homebrewを使用 (推奨)
+
+```sh
+# TODO: Homebrew formulaは準備中です
+```
+
+#### 方法2: 手動ビルド
+
+```sh
+git clone https://github.com/char5742/keyball-gestures.git
+cd keyball-gestures
+go build -o keyball-gestures cmd/main.go
+```
+
+**重要**: macOSではアクセシビリティ権限が必要です。初回起動時に権限を要求されるので、システム環境設定 > セキュリティとプライバシー > プライバシー > アクセシビリティから許可してください。
 
 **アプリケーションの起動:**
 
