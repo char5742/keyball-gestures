@@ -29,18 +29,32 @@ typedef enum {
 void sendScrollEvent(double deltaX, double deltaY, int fingerCount, int phase) {
     static double accumulatedX = 0;
     static double accumulatedY = 0;
+    static int initialDirection = 0; // 0: none, 1: horizontal, 2: vertical
     
     // 4本指ジェスチャーの場合は累積する
     if (fingerCount == 4) {
         if (phase == kScrollPhaseBegan) {
             accumulatedX = 0;
             accumulatedY = 0;
+            initialDirection = 0;
+            gestureTriggered = 0;
         }
         accumulatedX += deltaX;
         accumulatedY += deltaY;
         
+        // 初期方向の検出（早期判定）
+        if (initialDirection == 0 && (fabs(accumulatedX) > 5.0 || fabs(accumulatedY) > 5.0)) {
+            if (fabs(accumulatedY) > fabs(accumulatedX)) {
+                initialDirection = 2; // vertical
+            } else {
+                initialDirection = 1; // horizontal
+            }
+            fprintf(stderr, "[CGEvent] 4-finger initial direction detected: %s\n", 
+                    initialDirection == 1 ? "horizontal" : "vertical");
+        }
+        
         // 累積値が闾値を超えたときのみログ
-        if (fabs(accumulatedX) > 50.0 || fabs(accumulatedY) > 50.0) {
+        if (fabs(accumulatedX) > 20.0 || fabs(accumulatedY) > 20.0) {
             fprintf(stderr, "[CGEvent] 4-finger gesture accumulated: dx=%.2f, dy=%.2f, phase=%d\n", 
                     accumulatedX, accumulatedY, phase);
         }
@@ -54,8 +68,10 @@ void sendScrollEvent(double deltaX, double deltaY, int fingerCount, int phase) {
     deltaY = -deltaY;
     deltaX = -deltaX;
     
-    // 値が小さすぎる場合はスキップ
-    if (fabs(deltaX) < 0.1 && fabs(deltaY) < 0.1) {
+    // 値が小さすぎる場合はスキップ（2本指の場合はより小さい値も許可）
+    if (fingerCount == 2 && fabs(deltaX) < 0.01 && fabs(deltaY) < 0.01) {
+        return;
+    } else if (fingerCount == 4 && fabs(deltaX) < 0.1 && fabs(deltaY) < 0.1) {
         return;
     }
     
@@ -74,31 +90,37 @@ void sendScrollEvent(double deltaX, double deltaY, int fingerCount, int phase) {
             CGEventPost(kCGHIDEventTap, event);
             CFRelease(event);
             
-            fprintf(stderr, "[CGEvent] 2-finger scroll event posted (pixel units)\n");
+            // ログは削除してパフォーマンス向上
+            // fprintf(stderr, "[CGEvent] 2-finger scroll event posted (pixel units)\n");
         }
     } else if (fingerCount == 4) {
         // 4本指ジェスチャー - システムのアクセシビリティAPIを使用
         // fprintf(stderr, "[CGEvent] 4-finger gesture detected, dx=%.2f, dy=%.2f, phase=%d\n", deltaX, deltaY, phase);
         
         // 累積値で判定し、一度だけアクションを実行
-        double threshold = 50.0;
+        double threshold = 20.0;  // 閾値を下げて反応速度を向上
         
         // phase: 1=began, 2=changed, 4=ended
-        if (phase == 1) {  // kScrollPhaseBegan
+        if (phase == 4) {  // kScrollPhaseEnded
             gestureTriggered = 0;
             accumulatedX = 0;
             accumulatedY = 0;
-            fprintf(stderr, "[CGEvent] 4-finger gesture began, resetting\n");
-        } else if (phase == 4) {  // kScrollPhaseEnded
-            gestureTriggered = 0;
-            accumulatedX = 0;
-            accumulatedY = 0;
+            initialDirection = 0;
             fprintf(stderr, "[CGEvent] 4-finger gesture ended, resetting\n");
         }
         
-        // phase == 2 は kScrollPhaseChanged
+        // phase == 2 でジェスチャーを検出（早期トリガー）
         if (!gestureTriggered && phase == 2) {
-            if (fabs(accumulatedY) > fabs(accumulatedX)) {
+            // 方向がまだ決まっていない場合は、累積値で判定
+            if (initialDirection == 0) {
+                if (fabs(accumulatedY) > fabs(accumulatedX)) {
+                    initialDirection = 2;  // vertical
+                } else {
+                    initialDirection = 1;  // horizontal
+                }
+            }
+            
+            if (initialDirection == 2) {  // vertical
                 // 垂直方向のジェスチャー
                 if (accumulatedY < -threshold) {
                     // 上スワイプ - Mission Control
@@ -109,7 +131,7 @@ void sendScrollEvent(double deltaX, double deltaY, int fingerCount, int phase) {
                     
                     gestureTriggered = 1;
                 } else if (accumulatedY > threshold) {
-                    // 下スワイプ - App Expose
+                    // 下スワイプ - Show Desktop (F11)
                     fprintf(stderr, "[CGEvent] 4-finger swipe DOWN - Show Desktop\n");
                     
                     // デスクトップを表示（F11相当）
@@ -117,7 +139,7 @@ void sendScrollEvent(double deltaX, double deltaY, int fingerCount, int phase) {
                     
                     gestureTriggered = 1;
                 }
-            } else {
+            } else if (initialDirection == 1) {  // horizontal
                 // 水平方向のジェスチャー
                 if (accumulatedX < -threshold) {
                     // 左スワイプ - 次のデスクトップ
@@ -264,6 +286,9 @@ CGEventRef eventTapCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef 
             // 4本指ジェスチャーのリセット
             if (button == 2) {  // Mouse 3 = 4本指ジェスチャー
                 gestureTriggered = 0;
+                // initialDirectionもここでリセット
+                // 注: この変数はsendScrollEvent内のstatic変数なので、直接アクセスできない
+                // 代わりに、sendScrollEventでphase=4の時にリセットしている
                 fprintf(stderr, "[CGEvent] Mouse button %lld released - unlocking cursor\n", button);
             } else {
                 fprintf(stderr, "[CGEvent] Mouse button %lld released - unlocking cursor\n", button);
@@ -275,16 +300,17 @@ CGEventRef eventTapCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef 
     }
     
     // 特定のマウスボタンの状態を確認
-    if (type == kCGEventMouseMoved) {
-        // 現在のイベントからボタンの状態を取得
-        CGMouseButton button3State = CGEventSourceButtonState(kCGEventSourceStateHIDSystemState, 2); // Mouse 3
-        CGMouseButton button4State = CGEventSourceButtonState(kCGEventSourceStateHIDSystemState, 3); // Mouse 4
-        
-        if (button3State || button4State) {
-            fprintf(stderr, "[CGEvent] MouseMoved with button state - Button3: %d, Button4: %d\n", 
-                    button3State, button4State);
-        }
-    }
+    // パフォーマンス向上のため、この処理を削除
+    // if (type == kCGEventMouseMoved) {
+    //     // 現在のイベントからボタンの状態を取得
+    //     CGMouseButton button3State = CGEventSourceButtonState(kCGEventSourceStateHIDSystemState, 2); // Mouse 3
+    //     CGMouseButton button4State = CGEventSourceButtonState(kCGEventSourceStateHIDSystemState, 3); // Mouse 4
+    //     
+    //     if (button3State || button4State) {
+    //         fprintf(stderr, "[CGEvent] MouseMoved with button state - Button3: %d, Button4: %d\n", 
+    //                 button3State, button4State);
+    //     }
+    // }
     
     // カーソルがロックされている場合は元の位置に戻す
     pthread_mutex_lock(&cursorMutex);

@@ -23,9 +23,10 @@ void getMouseDelta(int32_t *dx, int32_t *dy) {
     lastMouseDelta.dy = 0;
     pthread_mutex_unlock(&mouseDeltaMutex);
     
-    if (*dx != 0 || *dy != 0) {
-        fprintf(stderr, "[CGEvent] getMouseDelta returning: dx=%d, dy=%d\n", *dx, *dy);
-    }
+    // ログを削除してパフォーマンス向上
+    // if (*dx != 0 || *dy != 0) {
+    //     fprintf(stderr, "[CGEvent] getMouseDelta returning: dx=%d, dy=%d\n", *dx, *dy);
+    // }
 }
 
 #include <stdio.h>
