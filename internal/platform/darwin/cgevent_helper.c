@@ -64,9 +64,10 @@ void sendScrollEvent(double deltaX, double deltaY, int fingerCount, int phase) {
         //         deltaX, deltaY, fingerCount, phase);
     }
     
-    // スクロールの方向を反転（Natural Scrolling）
-    deltaY = -deltaY;
-    deltaX = -deltaX;
+    // Natural Scrollingの方向はそのまま使用
+    // （macOSのシステム設定に従う）
+    // deltaY = -deltaY;
+    // deltaX = -deltaX;
     
     // 値が小さすぎる場合はスキップ（2本指の場合はより小さい値も許可）
     if (fingerCount == 2 && fabs(deltaX) < 0.01 && fabs(deltaY) < 0.01) {
