@@ -11,6 +11,11 @@ pthread_mutex_t mouseDeltaMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t keyMutex = PTHREAD_MUTEX_INITIALIZER;
 int gestureTriggered = 0;  // 4本指ジェスチャーのトリガー状態
 
+// マウスカーソル固定用
+CGPoint lockedPosition = {0, 0};
+int cursorLocked = 0;
+pthread_mutex_t cursorMutex = PTHREAD_MUTEX_INITIALIZER;
+
 // スクロールフェーズの定義
 typedef enum {
     kScrollPhaseBegan = 1,
@@ -226,7 +231,18 @@ CGEventRef eventTapCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef 
             // マウスボタンを特別なキーコードとして扱う（1000 + ボタン番号）
             pressedKey = 1000 + (int32_t)button;
             pthread_mutex_unlock(&keyMutex);
-            fprintf(stderr, "[CGEvent] Mouse button %lld pressed (code: %d) - consuming event\n", button, pressedKey);
+            
+            // 現在のカーソル位置を記録
+            pthread_mutex_lock(&cursorMutex);
+            CGEventRef currentEvent = CGEventCreate(NULL);
+            if (currentEvent != NULL) {
+                lockedPosition = CGEventGetLocation(currentEvent);
+                cursorLocked = 1;
+                CFRelease(currentEvent);
+                fprintf(stderr, "[CGEvent] Mouse button %lld pressed - locking cursor at (%.0f, %.0f)\n", 
+                        button, lockedPosition.x, lockedPosition.y);
+            }
+            pthread_mutex_unlock(&cursorMutex);
             
             // イベントを消費して、他のアプリケーションに伝播しないようにする
             return NULL;
@@ -240,12 +256,17 @@ CGEventRef eventTapCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef 
             pressedKey = 0;
             pthread_mutex_unlock(&keyMutex);
             
+            // カーソルロックを解除
+            pthread_mutex_lock(&cursorMutex);
+            cursorLocked = 0;
+            pthread_mutex_unlock(&cursorMutex);
+            
             // 4本指ジェスチャーのリセット
             if (button == 2) {  // Mouse 3 = 4本指ジェスチャー
                 gestureTriggered = 0;
-                fprintf(stderr, "[CGEvent] Mouse button %lld released - resetting 4-finger gesture\n", button);
+                fprintf(stderr, "[CGEvent] Mouse button %lld released - unlocking cursor\n", button);
             } else {
-                fprintf(stderr, "[CGEvent] Mouse button %lld released - consuming event\n", button);
+                fprintf(stderr, "[CGEvent] Mouse button %lld released - unlocking cursor\n", button);
             }
             
             // イベントを消費して、他のアプリケーションに伝播しないようにする
@@ -265,7 +286,23 @@ CGEventRef eventTapCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef 
         }
     }
     
-    // イベントをそのまま通過させる
+    // カーソルがロックされている場合は元の位置に戻す
+    pthread_mutex_lock(&cursorMutex);
+    if (cursorLocked && (type == kCGEventMouseMoved || type == kCGEventLeftMouseDragged || 
+                         type == kCGEventRightMouseDragged || type == kCGEventOtherMouseDragged)) {
+        // カーソルを固定位置に戻す
+        CGWarpMouseCursorPosition(lockedPosition);
+        pthread_mutex_unlock(&cursorMutex);
+        
+        // ジェスチャー中はマウス移動イベントを消費
+        if (pressedKey == 1002 || pressedKey == 1003) {
+            return NULL;
+        }
+    } else {
+        pthread_mutex_unlock(&cursorMutex);
+    }
+    
+    // その他のイベントはそのまま通過させる
     return event;
 }
 
@@ -339,4 +376,39 @@ void stopEventTap(CFMachPortRef eventTap) {
     
     // リリース
     CFRelease(eventTap);
+}
+
+// マウスカーソルを固定
+void lockMouseCursor() {
+    pthread_mutex_lock(&cursorMutex);
+    
+    // 現在のカーソル位置を記録
+    CGEventRef currentEvent = CGEventCreate(NULL);
+    if (currentEvent != NULL) {
+        lockedPosition = CGEventGetLocation(currentEvent);
+        cursorLocked = 1;
+        CFRelease(currentEvent);
+        
+        // マウスの動きとカーソルの連動を切り離す
+        CGAssociateMouseAndMouseCursorPosition(false);
+        
+        fprintf(stderr, "[CGEvent] Cursor locked at (%.0f, %.0f)\n", 
+                lockedPosition.x, lockedPosition.y);
+    }
+    
+    pthread_mutex_unlock(&cursorMutex);
+}
+
+// マウスカーソルの固定を解除
+void unlockMouseCursor() {
+    pthread_mutex_lock(&cursorMutex);
+    
+    cursorLocked = 0;
+    
+    // マウスの動きとカーソルの連動を再開
+    CGAssociateMouseAndMouseCursorPosition(true);
+    
+    fprintf(stderr, "[CGEvent] Cursor unlocked\n");
+    
+    pthread_mutex_unlock(&cursorMutex);
 }

@@ -71,15 +71,17 @@ func (m *DarwinMouseInput) GetMouseDelta() (dx int32, dy int32) {
 	return int32(cdx), int32(cdy)
 }
 
-// Grab はマウス入力を専有する（macOSでは必要ない）
+// Grab はマウス入力を専有する（マウスカーソルの動きを無効化）
 func (m *DarwinMouseInput) Grab() error {
-	// macOSではEvent Tapで入力を監視するため、明示的なGrabは不要
+	// マウスカーソルの動きを無効化
+	C.lockMouseCursor()
 	return nil
 }
 
-// Release はマウス入力の専有を解除する（macOSでは必要ない）
+// Release はマウス入力の専有を解除する（マウスカーソルの動きを再有効化）
 func (m *DarwinMouseInput) Release() error {
-	// macOSではEvent Tapで入力を監視するため、明示的なReleaseは不要
+	// マウスカーソルの動きを再有効化
+	C.unlockMouseCursor()
 	return nil
 }
 

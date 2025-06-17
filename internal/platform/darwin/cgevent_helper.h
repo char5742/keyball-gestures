@@ -8,6 +8,10 @@
 // スクロールイベントを作成して送信
 void sendScrollEvent(double deltaX, double deltaY, int fingerCount, int phase);
 
+// マウスカーソルの固定/解除
+void lockMouseCursor();
+void unlockMouseCursor();
+
 // Event Tapのコールバック関数の型定義
 CGEventRef eventTapCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon);
 
@@ -31,5 +35,9 @@ extern MouseDelta lastMouseDelta;
 
 // キー押下状態を保持
 extern int32_t pressedKey;
+
+// マウスカーソルの固定位置
+extern CGPoint lockedPosition;
+extern int cursorLocked;
 
 #endif // CGEVENT_HELPER_H
