@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 package features
 
 import (
@@ -5,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"syscall"
 
@@ -14,27 +16,19 @@ import (
 	"github.com/char5742/keyball-gestures/internal/utils"
 )
 
-// 絶対座標入力デバイスを表現するインターフェース
-type TouchPad interface {
-	MultiTouchDown(slot int, trackingID int, x int32, y int32) error
-	MultiTouchMove(slot int, x int32, y int32) error
-	MultiTouchUp(slot int) error
-	io.Closer
-}
-
 type virtualTouchPad struct {
 	name       []byte
 	deviceFile *os.File
 }
 
-// 新しいタッチパッドデバイスを作成する
-func CreateTouchPad(path string, name []byte, minX int32, maxX int32, minY int32, maxY int32) (TouchPad, error) {
-	fd, err := createTouchPad(path, name, minX, maxX, minY, maxY)
+// CreateTouchPad Linux実装：uinputを使用してタッチパッドデバイスを作成する
+func CreateTouchPad(config TouchPadConfig) (TouchPad, error) {
+	fd, err := createLinuxTouchPad("/dev/uinput", []byte(config.Name), config.MinX, config.MaxX, config.MinY, config.MaxY)
 	if err != nil {
 		return nil, err
 	}
 
-	return &virtualTouchPad{name: name, deviceFile: fd}, nil
+	return &virtualTouchPad{name: []byte(config.Name), deviceFile: fd}, nil
 }
 
 func (vt *virtualTouchPad) Close() error {
@@ -42,7 +36,7 @@ func (vt *virtualTouchPad) Close() error {
 	return vt.deviceFile.Close()
 }
 
-func createTouchPad(path string, name []byte, minX int32, maxX int32, minY int32, maxY int32) (*os.File, error) {
+func createLinuxTouchPad(path string, name []byte, minX int32, maxX int32, minY int32, maxY int32) (*os.File, error) {
 	deviceFile, err := createDeviceFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("could not create absolute axis input device: %v", err)

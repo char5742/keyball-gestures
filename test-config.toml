@@ -1,0 +1,35 @@
+# Keyball Gestures macOS テスト設定ファイル
+
+# 仮想タッチパッドの設定
+[touchpad]
+min_x = 0
+max_x = 10000
+min_y = 0
+max_y = 10000
+
+# キー入力の設定
+[input]
+# F1キー(122)を2本指ジェスチャーのトリガーとして使用（テスト用）
+two_finger_key = 122
+# F2キー(120)を4本指ジェスチャーのトリガーとして使用（テスト用）
+four_finger_key = 120
+
+# モーション制御の設定
+[motion]
+# スムージング無効化してテスト
+filter_smoothing_factor = 0.0
+# フィルターが動作し始めるまでのカウント
+filter_warm_up_count = 0
+# マウス移動量の調整係数（大きめにしてテスト）
+mouse_delta_factor = 50
+
+# ジェスチャー認識の設定
+[gesture]
+# スクロールをリセットするまでの時間 (ミリ秒)
+reset_threshold = 1000
+
+# デバイス設定
+[device_prefs]
+# Keyball39を明示的に指定
+preferred_keyboard_device = "Keyball39"
+preferred_mouse_device = "Keyball39"

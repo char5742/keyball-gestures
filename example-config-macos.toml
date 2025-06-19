@@ -1,0 +1,40 @@
+# Keyball Gestures macOS 設定ファイル
+
+# 仮想タッチパッドの設定
+[touchpad]
+# macOSではタッチパッド座標系を使用
+min_x = 0
+max_x = 10000
+min_y = 0
+max_y = 10000
+
+# キー入力の設定
+[input]
+# F14キー(macOS: 0x6B)を2本指ジェスチャーのトリガーとして使用
+# 注: 内部的にLinuxキーコードに変換されます
+two_finger_key = 184
+# F13キー(macOS: 0x69)を4本指ジェスチャーのトリガーとして使用
+# 注: 内部的にLinuxキーコードに変換されます
+four_finger_key = 183
+
+# モーション制御の設定
+[motion]
+# 0.0-1.0の範囲。1.0に近いほど滑らかになりますが、遅延が大きくなります
+filter_smoothing_factor = 0.85
+# フィルターが動作し始めるまでのカウント
+filter_warm_up_count = 10
+# マウス移動量の調整係数（macOSでは小さい値が推奨）
+mouse_delta_factor = 10
+
+# ジェスチャー認識の設定
+[gesture]
+# スクロールをリセットするまでの時間 (ミリ秒)
+reset_threshold = 50
+
+# デバイス設定
+[device_prefs]
+# 優先するキーボードデバイス名（macOSではHIDデバイス名を使用）
+# Keyballを使用する場合は "Keyball39" を指定してください
+preferred_keyboard_device = "Keyball39"
+# 優先するマウスデバイス名（macOSではHIDデバイス名を使用）
+preferred_mouse_device = "Keyball39"

@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 package types
 
 import "github.com/char5742/keyball-gestures/internal/consts"

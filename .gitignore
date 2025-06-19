@@ -1,1 +1,10 @@
 .copilot-commit-message-instructions.md
+
+# 実行ファイル
+keyball-gestures
+keyball-gestures-*
+demo
+test-*
+
+# macOS
+.DS_Store

@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 package consts
 
 // UIInput デバイスの定数（uinput.hから）

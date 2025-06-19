@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -52,8 +53,16 @@ func (s *GestureService) Start() error {
 
 	// 仮想タッチパッドデバイスの作成
 	log.Println("仮想タッチパッドデバイスを作成します")
-	padDevice, err := features.CreateTouchPad("/dev/uinput", []byte("VirtualTouchPad"),
-		s.cfg.TouchPad.MinX, s.cfg.TouchPad.MaxX, s.cfg.TouchPad.MinY, s.cfg.TouchPad.MaxY)
+	padDevice, err := features.CreateTouchPad(features.TouchPadConfig{
+		Name:                  "VirtualTouchPad",
+		MinX:                  s.cfg.TouchPad.MinX,
+		MaxX:                  s.cfg.TouchPad.MaxX,
+		MinY:                  s.cfg.TouchPad.MinY,
+		MaxY:                  s.cfg.TouchPad.MaxY,
+		MotionSmoothingFactor: s.cfg.Motion.FilterSmoothingFactor,
+		MotionWarmUpCount:     s.cfg.Motion.FilterWarmUpCount,
+		MouseDeltaFactor:      float64(s.cfg.Motion.MouseDeltaFactor),
+	})
 	if err != nil {
 		return fmt.Errorf("仮想タッチパッドの作成に失敗しました: %v", err)
 	}
@@ -636,7 +645,10 @@ func (s *GestureService) runDeviceHealthCheck() {
 				key := s.keyboard.GetKey()
 				// エラーかどうかは結果ではなくファイル状態で判断
 				if !s.isKeyboardDeviceAlive() {
-					log.Printf("キーボードデバイスが応答しません: GetKey=%d", key)
+					if runtime.GOOS != "darwin" {
+						// macOS以外でのみログを出力
+						log.Printf("キーボードデバイスが応答しません: GetKey=%d", key)
+					}
 					devicesFailed = true
 				}
 			} else {
@@ -648,7 +660,10 @@ func (s *GestureService) runDeviceHealthCheck() {
 			if s.mouse != nil {
 				// マウスデバイスへのアクセスを試みる
 				if !s.isMouseDeviceAlive() {
-					log.Println("マウスデバイスが応答しません")
+					if runtime.GOOS != "darwin" {
+						// macOS以外でのみログを出力
+						log.Println("マウスデバイスが応答しません")
+					}
 					devicesFailed = true
 				}
 			} else {
@@ -674,7 +689,14 @@ func (s *GestureService) isKeyboardDeviceAlive() bool {
 		return false
 	}
 
-	// デバイスファイルが存在するか確認
+	// macOSではパスはデバイス名なので、ファイルチェックはスキップ
+	if runtime.GOOS == "darwin" {
+		// macOSではキーボードが生きているかは実際のGetKey()の動作で判断
+		// ここでは常にtrueを返す（デバイスモニターで切断を検出）
+		return true
+	}
+
+	// Linuxではデバイスファイルが存在するか確認
 	if _, err := os.Stat(s.keyboardDevice.Path); os.IsNotExist(err) {
 		log.Printf("キーボードデバイスファイルが存在しません: %s", s.keyboardDevice.Path)
 		return false
@@ -689,7 +711,14 @@ func (s *GestureService) isMouseDeviceAlive() bool {
 		return false
 	}
 
-	// デバイスファイルが存在するか確認
+	// macOSではパスはデバイス名なので、ファイルチェックはスキップ
+	if runtime.GOOS == "darwin" {
+		// macOSではマウスが生きているかは実際のGetMouseDelta()の動作で判断
+		// ここでは常にtrueを返す（デバイスモニターで切断を検出）
+		return true
+	}
+
+	// Linuxではデバイスファイルが存在するか確認
 	if _, err := os.Stat(s.mouseDevice.Path); os.IsNotExist(err) {
 		log.Printf("マウスデバイスファイルが存在しません: %s", s.mouseDevice.Path)
 		return false

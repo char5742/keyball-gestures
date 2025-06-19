@@ -1,6 +1,6 @@
 # Keyball Gestures アーキテクチャ設計
 
-このドキュメントでは、Keyball Gesturesのアーキテクチャと内部設計について説明します。
+このドキュメントでは、Keyball Gesturesのアーキテクチャと内部設計について説明します。本システムはLinuxとmacOSの両方をサポートするクロスプラットフォームアプリケーションとして設計されています。
 
 ## 全体アーキテクチャ
 
@@ -33,11 +33,16 @@ Keyball Gesturesは、CLIアプリケーションとAPIサーバーの2つの動
          │
          ▼
 ┌─────────────────┐
-│                 │
-│  Linux入力      │
-│  サブシステム   │
-│  (/dev/uinput)  │
-└─────────────────┘
+│ プラットフォーム│
+│ 抽象化層        │
+└────────┬────────┘
+         │
+    ┌────┴────┐
+    ▼         ▼
+┌────────┐ ┌────────┐
+│ Linux  │ │ macOS  │
+│uinput  │ │CGEvent │
+└────────┘ └────────┘
 ```
 
 ## 主要コンポーネント
@@ -164,3 +169,67 @@ Flutterフロントエンドは、APIサーバーモードで動作するKeyball
 4. **状態確認**: サービスの現在の状態 (`running`/`stopped`) やサーバーの健全性 (`/api/health`) を取得
 
 フロントエンドはHTTP APIを通じてこれらの操作を行い、バックエンドはRESTful APIとして実装されています。
+
+## プラットフォーム抽象化
+
+Keyball Gesturesは、プラットフォーム固有の実装を抽象化することで、LinuxとmacOSの両方をサポートしています。
+
+### インターフェース設計
+
+主要なインターフェースは以下の通りです：
+
+- **TouchPad**: タッチパッドイベントのシミュレーション
+- **Keyboard**: キーボード入力の監視
+- **Mouse**: マウス入力の監視
+- **Device**: デバイスの検出と管理
+
+各インターフェースは、プラットフォーム固有の実装を持ちます：
+
+```
+interface/
+├── touchpad_interface.go
+├── keyboard_interface.go
+├── mouse_interface.go
+└── devices_interface.go
+
+linux/
+├── touchpad_linux.go    # uinputを使用
+├── keyboard_linux.go    # evdevを使用
+├── mouse_linux.go       # evdevを使用
+└── devices_linux.go     # /dev/inputを監視
+
+darwin/
+├── touchpad_darwin.go   # CoreGraphics APIを使用
+├── keyboard_darwin.go   # CGEventTapを使用
+├── mouse_darwin.go      # CGEventTapを使用
+└── devices_darwin.go    # IOKitを使用
+```
+
+### プラットフォーム固有の実装
+
+#### Linux
+- **タッチパッド**: `/dev/uinput`を使用して仮想タッチパッドデバイスを作成
+- **入力監視**: evdevインターフェースを通じて物理デバイスを監視
+- **権限**: root権限またはudevルールによる`input`グループへのアクセスが必要
+
+#### macOS
+- **タッチパッド**: CoreGraphics Event APIを使用してジェスチャーイベントを生成
+- **入力監視**: CGEventTapを使用してキーボード・マウスイベントを監視
+- **権限**: システム環境設定でアクセシビリティ権限の付与が必要
+
+### ビルドタグ
+
+Go言語のビルドタグを使用して、プラットフォーム固有のコードを分離：
+
+```go
+//go:build linux
+// +build linux
+```
+
+```go
+//go:build darwin
+// +build darwin
+```
+
+これにより、コンパイル時に適切なプラットフォーム実装が選択されます。
+EOF < /dev/null

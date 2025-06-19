@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 package features
 
 import (
@@ -8,12 +11,6 @@ import (
 
 	"golang.org/x/sys/unix"
 )
-
-// キーボードからの入力を処理するインターフェース
-type Keyboard interface {
-	GetKey() (key int32)
-	Close() error
-}
 
 type virtualKeyboard struct {
 	*os.File

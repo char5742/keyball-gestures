@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 package consts
 
 // イベントタイプの定数（input-event-codes.hより）
