@@ -189,7 +189,7 @@ void postSwipeGesture(double deltaX, double deltaY, int phase, CGPoint pos, doub
     }
     
     // デバッグ出力
-    NSLog(@"postSwipeGesture: phase=%d, phaseMask=0x%x", phase, phaseMask);
+    NSLog(@"postSwipeGesture: Δ(%.1f,%.1f), phase=%d, phaseMask=0x%x", deltaX, deltaY, phase, phaseMask);
     
     // 空のイベントを作成（純粋なジェスチャーイベント）
     CGEventRef gesture = CGEventCreate(_eventSource);
@@ -205,9 +205,9 @@ void postSwipeGesture(double deltaX, double deltaY, int phase, CGPoint pos, doub
     // subtype=23 (Swipe) 固定
     CGEventSetIntegerValueField(gesture, kCGEventFieldIOHIDEventSubtype, kIOHIDEventSubtypeSwipeNew);
     
-    // delta値は常に0（ネイティブ仕様）
-    CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaX, 0.0);
-    CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaY, 0.0);
+    // delta値を設定（GestureDeltaフィールドは0だが、実際の動きを伝える）
+    CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaX, deltaX);
+    CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaY, deltaY);
     
     // ジェスチャーフェーズを設定
     CGEventSetIntegerValueField(gesture, kCGEventFieldGesturePhase, phase);
@@ -548,15 +548,27 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 			dt.currentSwipePhase = int(C.kIOHIDEventPhaseChanged)
 		}
 		
-		// スワイプイベントを送信（delta、累積移動量はすべて0）
+		// モーションフィルターを適用
+		filteredDeltaX, filteredDeltaY := dt.motionFilter.Filter(deltaX, deltaY)
+		
+		// スケーリング（タッチパッド座標系からピクセルへ）
+		scaleFactor := dt.config.SwipeScaleFactor
+		if scaleFactor == 0 {
+			scaleFactor = 0.3  // デフォルト値（Mission Control動作用）
+		}
+		scaledDeltaX := float64(filteredDeltaX) * scaleFactor
+		scaledDeltaY := float64(filteredDeltaY) * scaleFactor
+		
+		// スワイプイベントを送信
 		C.postSwipeGesture(
-			0, 0,  // deltaは常に0
+			C.double(scaledDeltaX),
+			C.double(scaledDeltaY),
 			C.int(dt.currentSwipePhase),
 			dt.gestureStartPos.toCGPoint(),
-			0, 0,  // 累積も不要
+			0, 0,  // 累積は使わない
 		)
 		
-		log.Printf("4本指スワイプ移動: phase=%d", dt.currentSwipePhase)
+		log.Printf("4本指スワイプ移動: Δ(%.1f,%.1f), phase=%d", scaledDeltaX, scaledDeltaY, dt.currentSwipePhase)
 	}
 
 	// 位置を更新
