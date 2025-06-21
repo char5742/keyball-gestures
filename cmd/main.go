@@ -44,6 +44,7 @@ func main() {
 			cfg = config.DefaultConfig()
 		} else {
 			fmt.Printf("設定ファイルを読み込みました: %s\n", cfgPath)
+			fmt.Printf("TwoFingerKey: %d, FourFingerKey: %d\n", cfg.Input.TwoFingerKey, cfg.Input.FourFingerKey)
 		}
 	} else {
 		cfg = config.DefaultConfig()

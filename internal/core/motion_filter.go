@@ -1,4 +1,4 @@
-package features
+package core
 
 import "time"
 
@@ -13,7 +13,7 @@ type MotionFilter struct {
 	initialized     bool
 }
 
-// 新しいモーションフィルターを作成します
+// NewMotionFilter 新しいモーションフィルターを作成します
 func NewMotionFilter(smoothingFactor float64, warmUpCount int) *MotionFilter {
 	return &MotionFilter{
 		smoothingFactor: smoothingFactor,
@@ -22,7 +22,7 @@ func NewMotionFilter(smoothingFactor float64, warmUpCount int) *MotionFilter {
 	}
 }
 
-// raw dx, dy値にsmoothingを適用します
+// Filter raw dx, dy値にsmoothingを適用します
 func (mf *MotionFilter) Filter(dxRaw, dyRaw int32) (int32, int32) {
 	now := time.Now()
 	mf.lastTime = now
@@ -48,7 +48,7 @@ func (mf *MotionFilter) Filter(dxRaw, dyRaw int32) (int32, int32) {
 	return int32(newDX + 0.5), int32(newDY + 0.5)
 }
 
-// フィルターの状態をリセットします
+// Reset フィルターの状態をリセットします
 func (mf *MotionFilter) Reset() {
 	mf.lastDX = 0
 	mf.lastDY = 0

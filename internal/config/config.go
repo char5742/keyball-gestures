@@ -69,13 +69,13 @@ func DefaultConfig() *Config {
 			MaxY: 32767,
 		},
 		Input: InputConfig{
-			TwoFingerKey:  184, // F14
-			FourFingerKey: 183, // F13
+			TwoFingerKey:  1003, // Mouse 4
+			FourFingerKey: 1002, // Mouse 3
 		},
 		Motion: MotionConfig{
 			FilterSmoothingFactor: 0.85,
 			FilterWarmUpCount:     10,
-			MouseDeltaFactor:      15,
+			MouseDeltaFactor:      1,  // macOSでは1倍で十分
 		},
 		Gesture: GestureConfig{
 			ResetThreshold: 50 * time.Millisecond,
