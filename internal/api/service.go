@@ -62,6 +62,8 @@ func (s *GestureService) Start() error {
 		MotionSmoothingFactor: s.cfg.Motion.FilterSmoothingFactor,
 		MotionWarmUpCount:     s.cfg.Motion.FilterWarmUpCount,
 		MouseDeltaFactor:      float64(s.cfg.Motion.MouseDeltaFactor),
+		ScrollScaleFactor:     s.cfg.Motion.ScrollScaleFactor,
+		SwipeScaleFactor:      s.cfg.Motion.SwipeScaleFactor,
 	})
 	if err != nil {
 		return fmt.Errorf("仮想タッチパッドの作成に失敗しました: %v", err)

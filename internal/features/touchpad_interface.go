@@ -19,5 +19,7 @@ type TouchPadConfig struct {
 	MaxY                    int32
 	MotionSmoothingFactor   float64
 	MotionWarmUpCount       int
-	MouseDeltaFactor        float64
+	MouseDeltaFactor        float64  // 廃止予定: ScrollScaleFactorとSwipeScaleFactorを使用
+	ScrollScaleFactor       float64  // 2本指スクロールのスケール係数
+	SwipeScaleFactor        float64  // 4本指スワイプのスケール係数
 }

@@ -463,12 +463,20 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 
 	// 2本指スクロール中の場合
 	if dt.scrollStarted && dt.getActiveTouchCount() == 2 {
+		// 代表スロット以外は無視
+		if slot != dt.primarySlot {
+			return nil
+		}
+		
 		// モーションフィルターを適用
 		filteredDeltaX, filteredDeltaY := dt.motionFilter.Filter(deltaX, deltaY)
 		
 		// スケーリング（タッチパッド座標系からピクセルへ）
-		// mac-mouse-fixの実装に基づいて調整
-		scaleFactor := dt.config.MouseDeltaFactor * 0.05  // より適切な値に調整
+		// ScrollScaleFactorが設定されていない場合はデフォルト値を使用
+		scaleFactor := dt.config.ScrollScaleFactor
+		if scaleFactor == 0 {
+			scaleFactor = dt.config.MouseDeltaFactor * 0.05  // 後方互換性
+		}
 		scaledDeltaX := float64(filteredDeltaX) * scaleFactor
 		scaledDeltaY := float64(filteredDeltaY) * scaleFactor
 		
@@ -515,7 +523,11 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 		filteredDeltaX, filteredDeltaY := dt.motionFilter.Filter(deltaX, deltaY)
 		
 		// スケーリング（4本指スワイプはより大きな動きが必要）
-		scaleFactor := dt.config.MouseDeltaFactor * 0.3  // 適切なデルタ値に調整
+		// SwipeScaleFactorが設定されていない場合はデフォルト値を使用
+		scaleFactor := dt.config.SwipeScaleFactor
+		if scaleFactor == 0 {
+			scaleFactor = dt.config.MouseDeltaFactor * 0.3  // 後方互換性
+		}
 		scaledDeltaX := float64(filteredDeltaX) * scaleFactor
 		scaledDeltaY := float64(filteredDeltaY) * scaleFactor
 		

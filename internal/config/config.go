@@ -46,6 +46,8 @@ type MotionConfig struct {
 	FilterSmoothingFactor float64 `toml:"filter_smoothing_factor"`
 	FilterWarmUpCount     int     `toml:"filter_warm_up_count"`
 	MouseDeltaFactor      int     `toml:"mouse_delta_factor"`
+	ScrollScaleFactor     float64 `toml:"scroll_scale_factor"`  // 2本指スクロールのスケール係数
+	SwipeScaleFactor      float64 `toml:"swipe_scale_factor"`   // 4本指スワイプのスケール係数
 }
 
 // GestureConfig はジェスチャー認識の設定
@@ -76,6 +78,8 @@ func DefaultConfig() *Config {
 			FilterSmoothingFactor: 0.85,
 			FilterWarmUpCount:     10,
 			MouseDeltaFactor:      15,
+			ScrollScaleFactor:     0.75,  // デフォルト: MouseDeltaFactor * 0.05 = 0.75
+			SwipeScaleFactor:      4.5,   // デフォルト: MouseDeltaFactor * 0.3 = 4.5
 		},
 		Gesture: GestureConfig{
 			ResetThreshold: 50 * time.Millisecond,

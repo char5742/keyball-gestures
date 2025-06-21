@@ -25,6 +25,10 @@ filter_smoothing_factor = 0.85
 filter_warm_up_count = 10
 # マウス移動量の調整係数（macOSでは小さい値が推奨）
 mouse_delta_factor = 10
+# 2本指スクロールのスケール係数（デフォルト: 0.75）
+scroll_scale_factor = 0.75
+# 4本指スワイプのスケール係数（デフォルト: 4.5）
+swipe_scale_factor = 4.5
 
 # ジェスチャー認識の設定
 [gesture]
