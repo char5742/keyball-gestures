@@ -92,31 +92,35 @@ int initializeTouchpad() {
     return 1;
 }
 
-// スクロールイベントを送信（mac-mouse-fix方式）
+// スクロールイベントを送信（修正版）
 void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPhase) {
-    // Type 22イベント（ScrollWheel）を作成
-    CGEventRef e22 = CGEventCreate(_eventSource);
+    // 標準的な方法でスクロールイベントを作成
+    CGEventRef e22 = CGEventCreateScrollWheelEvent(
+        _eventSource,
+        kCGScrollEventUnitPixel,
+        2,  // 2軸（Y, X）
+        (int32_t)deltaY,
+        (int32_t)deltaX
+    );
     if (!e22) return;
     
-    CGEventSetIntegerValueField(e22, kCGEventFieldNSEventType, NSEventTypeScrollWheel);
-    CGEventSetIntegerValueField(e22, kCGEventFieldContinuous, 1);  // Continuous scrolling
-    
-    // デルタ値を設定（3種類すべて）
-    int lineY = (int)round(deltaY);
-    int lineX = (int)round(deltaX);
-    
-    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelDeltaAxis1, lineY);
-    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelDeltaAxis2, lineX);
-    
-    CGEventSetDoubleValueField(e22, kCGEventFieldScrollWheelPointDeltaAxis1, deltaY);
-    CGEventSetDoubleValueField(e22, kCGEventFieldScrollWheelPointDeltaAxis2, deltaX);
-    
-    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelFixedPtDeltaAxis1, toFixed16_16(deltaY));
-    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelFixedPtDeltaAxis2, toFixed16_16(deltaX));
+    // トラックパッドからのイベントであることを示す
+    CGEventSetIntegerValueField(e22, kCGEventFieldContinuous, 1);
     
     // フェーズを設定
     CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelPhase, phase);
     CGEventSetIntegerValueField(e22, kCGEventFieldMomentumScrollPhase, momentumPhase);
+    
+    // 現在のマウス位置を設定
+    CGEventRef posEvent = CGEventCreate(NULL);
+    if (posEvent) {
+        CGPoint currentPos = CGEventGetLocation(posEvent);
+        CGEventSetLocation(e22, currentPos);
+        CFRelease(posEvent);
+    }
+    
+    // タイムスタンプを設定
+    CGEventSetTimestamp(e22, mach_absolute_time());
     
     // Type 29イベント（Gesture）を作成
     CGEventRef e29 = CGEventCreate(_eventSource);
@@ -125,6 +129,7 @@ void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPh
         return;
     }
     
+    CGEventSetType(e29, (CGEventType)NSEventTypeGesture);
     CGEventSetIntegerValueField(e29, kCGEventFieldNSEventType, NSEventTypeGesture);
     CGEventSetIntegerValueField(e29, kCGEventFieldIOHIDEventSubtype, kIOHIDEventTypeScroll);
     
@@ -134,6 +139,9 @@ void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPh
     
     // ジェスチャーフェーズを設定
     CGEventSetIntegerValueField(e29, kCGEventFieldGesturePhase, phase);
+    
+    // タイムスタンプを設定
+    CGEventSetTimestamp(e29, mach_absolute_time());
     
     // 両方のイベントを送信
     CGEventPost(kCGHIDEventTap, e22);

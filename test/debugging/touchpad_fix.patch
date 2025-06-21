@@ -1,0 +1,47 @@
+--- touchpad_darwin.go.orig
++++ touchpad_darwin.go.fixed
+@@ -95,11 +95,15 @@
+ // スクロールイベントを送信（mac-mouse-fix方式）
+ void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPhase) {
+-    // Type 22イベント（ScrollWheel）を作成
+-    CGEventRef e22 = CGEventCreate(_eventSource);
+-    if (!e22) return;
++    // 標準的な方法でスクロールイベントを作成
++    CGEventRef e22 = CGEventCreateScrollWheelEvent(
++        _eventSource,
++        kCGScrollEventUnitPixel,
++        2,  // 2軸（X, Y）
++        (int32_t)deltaY,
++        (int32_t)deltaX
++    );
++    if (!e22) return;
+     
+-    CGEventSetIntegerValueField(e22, kCGEventFieldNSEventType, NSEventTypeScrollWheel);
+     CGEventSetIntegerValueField(e22, kCGEventFieldContinuous, 1);  // Continuous scrolling
+     
+-    // デルタ値を設定（3種類すべて）
+-    int lineY = (int)round(deltaY);
+-    int lineX = (int)round(deltaX);
+-    
+-    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelDeltaAxis1, lineY);
+-    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelDeltaAxis2, lineX);
+-    
+-    CGEventSetDoubleValueField(e22, kCGEventFieldScrollWheelPointDeltaAxis1, deltaY);
+-    CGEventSetDoubleValueField(e22, kCGEventFieldScrollWheelPointDeltaAxis2, deltaX);
+-    
+-    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelFixedPtDeltaAxis1, toFixed16_16(deltaY));
+-    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelFixedPtDeltaAxis2, toFixed16_16(deltaX));
+-    
+     // フェーズを設定
+     CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelPhase, phase);
+     CGEventSetIntegerValueField(e22, kCGEventFieldMomentumScrollPhase, momentumPhase);
+     
++    // マウスの現在位置を設定
++    CGEventRef posEvent = CGEventCreate(NULL);
++    if (posEvent) {
++        CGPoint currentPos = CGEventGetLocation(posEvent);
++        CGEventSetLocation(e22, currentPos);
++        CFRelease(posEvent);
++    }
++    
+     // Type 29イベント（Gesture）を作成

@@ -1,0 +1,10 @@
+# ビルド成果物
+event_monitor
+integration_test
+
+# テスト結果
+test-results/
+
+# 一時ファイル
+*.tmp
+*.log
