@@ -57,6 +57,8 @@ CGEventRef mouseEventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRe
         
         // Grabモードの場合、イベントを消費
         if (mouseGrabbed) {
+            fprintf(stderr, "[MouseDarwin] Mouse grabbed, consuming event: dx=%lld, dy=%lld\n", deltaX, deltaY);
+            fflush(stderr);
             return NULL;  // イベントを消費
         }
     }
@@ -179,6 +181,8 @@ void setMouseGrabbed(bool grabbed) {
     pthread_mutex_lock(&mouseMutex);
     mouseGrabbed = grabbed;
     pthread_mutex_unlock(&mouseMutex);
+    fprintf(stderr, "[MouseDarwin] Mouse grabbed state changed: %s\n", grabbed ? "true" : "false");
+    fflush(stderr);
 }
 
 // マウスグラブ状態を取得

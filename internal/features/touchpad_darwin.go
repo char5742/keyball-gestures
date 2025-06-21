@@ -17,6 +17,7 @@ import (
 #import <CoreGraphics/CoreGraphics.h>
 #import <Foundation/Foundation.h>
 #import <ApplicationServices/ApplicationServices.h>
+#import <mach/mach_time.h>
 
 // CGEventの非公開フィールド定数（mac-mouse-fixから）
 const int kCGEventFieldNSEventType = 55;
@@ -37,6 +38,8 @@ const int kCGEventFieldContinuous = 88;
 // NSEventType定数
 const int NSEventTypeScrollWheel = 22;
 const int NSEventTypeGesture = 29;
+const int NSEventTypeGestureChange = 30;
+const int NSEventTypeGestureEnd = 31;
 
 // IOHIDEventタイプ定数
 const int kIOHIDEventTypeScroll = 6;
@@ -142,22 +145,45 @@ void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPh
 
 // 4本指スワイプイベントを送信
 void postSwipeGesture(double deltaX, double deltaY, int phase) {
-    // ジェスチャーイベントを作成
+    // デバッグ出力
+    NSLog(@"postSwipeGesture: deltaX=%f, deltaY=%f, phase=%d", deltaX, deltaY, phase);
+    
+    // 空のイベントを作成（純粋なジェスチャーイベント）
     CGEventRef gesture = CGEventCreate(_eventSource);
-    if (!gesture) return;
+    if (!gesture) {
+        NSLog(@"Failed to create event");
+        return;
+    }
     
-    // NSEventTypeGestureを設定
-    CGEventSetIntegerValueField(gesture, kCGEventFieldNSEventType, NSEventTypeGesture);
+    // フェーズに応じてNSEventTypeを設定
+    int nsEventType = NSEventTypeGesture;  // デフォルトはBegin
+    if (phase == kIOHIDEventPhaseChanged) {
+        nsEventType = NSEventTypeGestureChange;
+    } else if (phase == kIOHIDEventPhaseEnded) {
+        nsEventType = NSEventTypeGestureEnd;
+    }
     
-    // スワイプジェスチャーとして設定（サブタイプは異なる）
+    // ジェスチャーイベントとして必要なフィールドをすべて設定
+    CGEventSetIntegerValueField(gesture, kCGEventFieldNSEventType, nsEventType);
     CGEventSetIntegerValueField(gesture, kCGEventFieldIOHIDEventSubtype, 2);  // スワイプ
     
-    // ジェスチャーデルタを設定
+    // ジェスチャーのdelta値を設定（これが最も重要）
     CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaX, deltaX);
     CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaY, deltaY);
     
     // ジェスチャーフェーズを設定
     CGEventSetIntegerValueField(gesture, kCGEventFieldGesturePhase, phase);
+    
+    // タイムスタンプを設定（必須）
+    CGEventSetTimestamp(gesture, mach_absolute_time());
+    
+    // イベントタイプを設定（重要）
+    CGEventSetType(gesture, (CGEventType)nsEventType);
+    
+    // デバッグ: 設定した値を確認
+    double checkX = CGEventGetDoubleValueField(gesture, kCGEventFieldGestureDeltaX);
+    double checkY = CGEventGetDoubleValueField(gesture, kCGEventFieldGestureDeltaY);
+    NSLog(@"After setting - GestureX=%f, GestureY=%f, EventType=%d", checkX, checkY, nsEventType);
     
     // イベントを送信
     CGEventPost(kCGHIDEventTap, gesture);
@@ -187,6 +213,9 @@ type darwinTouchPad struct {
 	initialized     bool
 	currentScrollPhase int
 	currentSwipePhase  int  // 4本指スワイプのフェーズ
+	pendingGesture    bool  // ジェスチャー開始を保留中
+	firstTouchTime    time.Time  // 最初のタッチの時刻
+	gestureTimer     *time.Timer  // ジェスチャー開始のタイマー
 }
 
 // タッチスロット情報
@@ -236,39 +265,60 @@ func (dt *darwinTouchPad) MultiTouchDown(slot int, trackingID int, x int32, y in
 		isActive:   true,
 	}
 
-	// アクティブなタッチ数を取得
-	activeCount := dt.getActiveTouchCount()
+	// タッチ開始前のアクティブなタッチ数を取得
+	previousCount := dt.getActiveTouchCount() - 1  // 今追加したタッチを除く
 	
-	// 2本指タッチの場合、スクロール開始
-	if activeCount == 2 && !dt.scrollStarted && !dt.swipeStarted {
-		dt.scrollStarted = true
-		dt.currentScrollPhase = int(C.kIOHIDEventPhaseMayBegin)
-		
-		// MayBeginフェーズを送信
-		C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseMayBegin, C.kCGMomentumScrollPhaseNone)
-		
-		// 少し遅延を入れてからBeganフェーズを送信
-		time.Sleep(1 * time.Millisecond)
-		dt.currentScrollPhase = int(C.kIOHIDEventPhaseBegan)
-		C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseBegan, C.kCGMomentumScrollPhaseNone)
-		
-		log.Printf("スクロール開始: activeCount=%d", activeCount)
+	// 最初のタッチの時刻を記録
+	if previousCount == 0 {
+		dt.firstTouchTime = time.Now()
+		dt.pendingGesture = true
+		log.Printf("最初のタッチダウン: slot=%d", slot)
 	}
 	
-	// 4本指タッチの場合、スワイプ開始
-	if activeCount == 4 && !dt.scrollStarted && !dt.swipeStarted {
-		dt.swipeStarted = true
-		dt.currentSwipePhase = int(C.kIOHIDEventPhaseMayBegin)
+	// すべてのタッチが追加された後のアクティブなタッチ数を取得
+	activeCount := dt.getActiveTouchCount()
+	
+	// ジェスチャー判定を遅延させる（50ms以内に追加されたタッチは同時とみなす）
+	if dt.pendingGesture && time.Since(dt.firstTouchTime) < 50*time.Millisecond {
+		// まだジェスチャーを開始しない
+		log.Printf("タッチ追加中: activeCount=%d", activeCount)
+		return nil
+	}
+	
+	// ジェスチャーの種類を判定して開始
+	if dt.pendingGesture && !dt.scrollStarted && !dt.swipeStarted {
+		dt.pendingGesture = false
 		
-		// MayBeginフェーズを送信
-		C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseMayBegin)
-		
-		// 少し遅延を入れてからBeganフェーズを送信
-		time.Sleep(1 * time.Millisecond)
-		dt.currentSwipePhase = int(C.kIOHIDEventPhaseBegan)
-		C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseBegan)
-		
-		log.Printf("4本指スワイプ開始: activeCount=%d", activeCount)
+		if activeCount == 2 {
+			// 2本指スクロール開始
+			dt.scrollStarted = true
+			dt.currentScrollPhase = int(C.kIOHIDEventPhaseMayBegin)
+			
+			// MayBeginフェーズを送信
+			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseMayBegin, C.kCGMomentumScrollPhaseNone)
+			
+			// 少し遅延を入れてからBeganフェーズを送信
+			time.Sleep(1 * time.Millisecond)
+			dt.currentScrollPhase = int(C.kIOHIDEventPhaseBegan)
+			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseBegan, C.kCGMomentumScrollPhaseNone)
+			
+			log.Printf("2本指スクロール開始: activeCount=%d", activeCount)
+		} else if activeCount == 4 {
+			// 4本指スワイプ開始
+			dt.swipeStarted = true
+			dt.currentSwipePhase = int(C.kIOHIDEventPhaseMayBegin)
+			
+			// MayBeginフェーズを送信
+			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseMayBegin)
+			log.Printf("4本指スワイプ MayBegin送信")
+			
+			// 少し遅延を入れてからBeganフェーズを送信
+			time.Sleep(1 * time.Millisecond)
+			dt.currentSwipePhase = int(C.kIOHIDEventPhaseBegan)
+			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseBegan)
+			
+			log.Printf("4本指スワイプ開始: activeCount=%d, phase=Began", activeCount)
+		}
 	}
 
 	dt.lastEventTime = time.Now()
@@ -292,6 +342,37 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 	// デルタを計算
 	deltaX := x - touch.lastX
 	deltaY := y - touch.lastY
+
+	// ジェスチャー判定中の場合
+	if dt.pendingGesture && time.Since(dt.firstTouchTime) >= 50*time.Millisecond {
+		dt.pendingGesture = false
+		activeCount := dt.getActiveTouchCount()
+		
+		if activeCount == 2 && !dt.scrollStarted && !dt.swipeStarted {
+			// 2本指スクロール開始
+			dt.scrollStarted = true
+			dt.currentScrollPhase = int(C.kIOHIDEventPhaseMayBegin)
+			
+			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseMayBegin, C.kCGMomentumScrollPhaseNone)
+			time.Sleep(1 * time.Millisecond)
+			dt.currentScrollPhase = int(C.kIOHIDEventPhaseBegan)
+			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseBegan, C.kCGMomentumScrollPhaseNone)
+			
+			log.Printf("2本指スクロール開始（移動時）: activeCount=%d", activeCount)
+		} else if activeCount == 4 && !dt.scrollStarted && !dt.swipeStarted {
+			// 4本指スワイプ開始
+			dt.swipeStarted = true
+			dt.currentSwipePhase = int(C.kIOHIDEventPhaseMayBegin)
+			
+			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseMayBegin)
+			log.Printf("4本指スワイプ MayBegin送信（移動時）")
+			time.Sleep(1 * time.Millisecond)
+			dt.currentSwipePhase = int(C.kIOHIDEventPhaseBegan)
+			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseBegan)
+			
+			log.Printf("4本指スワイプ開始（移動時）: activeCount=%d, phase=Began", activeCount)
+		}
+	}
 
 	// 2本指スクロール中の場合
 	if dt.scrollStarted && dt.getActiveTouchCount() == 2 {
@@ -349,7 +430,15 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 				C.int(dt.currentSwipePhase),
 			)
 			
-			log.Printf("4本指スワイプ移動: dx=%.2f, dy=%.2f, phase=%d", scaledDeltaX, scaledDeltaY, dt.currentSwipePhase)
+			log.Printf("4本指スワイプ移動: dx=%.2f, dy=%.2f, phase=%d (type=%d)", scaledDeltaX, scaledDeltaY, dt.currentSwipePhase, 
+				func() int {
+					if dt.currentSwipePhase == int(C.kIOHIDEventPhaseChanged) {
+						return 30 // GestureChange
+					} else if dt.currentSwipePhase == int(C.kIOHIDEventPhaseEnded) {
+						return 31 // GestureEnd
+					}
+					return 29 // GestureBegin
+				}())
 		}
 	}
 
@@ -401,7 +490,7 @@ func (dt *darwinTouchPad) MultiTouchUp(slot int) error {
 			dt.currentSwipePhase = 0
 			dt.motionFilter.Reset()
 			
-			log.Println("4本指スワイプ終了")
+			log.Println("4本指スワイプ終了 (type=31)")
 		}
 	}
 

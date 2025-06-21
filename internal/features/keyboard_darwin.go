@@ -32,6 +32,7 @@ static CFRunLoopSourceRef runLoopSource = NULL;
 static CFRunLoopRef runLoop = NULL;
 static pthread_t runLoopThread;
 static bool isRunning = false;
+static bool gestureActive = false;  // ジェスチャーがアクティブかどうか
 static pthread_mutex_t keyMutex = PTHREAD_MUTEX_INITIALIZER;
 
 // イベントコールバック
@@ -42,33 +43,56 @@ CGEventRef keyEventCallback(CGEventTapProxy proxy, CGEventType type, CGEventRef 
         return event;
     }
     
-    pthread_mutex_lock(&keyMutex);
-    
     if (type == kCGEventKeyDown) {
         CGKeyCode keyCode = (CGKeyCode)CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode);
-        // デバッグ用: 特定のキーのみログ出力
-        if (keyCode == kVK_F1 || keyCode == kVK_F2 || keyCode == kVK_F13 || keyCode == kVK_F14) {
-            fprintf(stderr, "[KeyboardDarwin] KeyDown: keyCode=0x%x (%d)\n", keyCode, keyCode);
+        
+        // F13/F14キーの場合、記録してイベントを消費
+        if (keyCode == kVK_F13 || keyCode == kVK_F14) {
+            pthread_mutex_lock(&keyMutex);
+            currentKey = (int32_t)keyCode;
+            gestureActive = true;
+            pthread_mutex_unlock(&keyMutex);
+            
+            fprintf(stderr, "[KeyboardDarwin] F13/F14 KeyDown detected and consumed: keyCode=0x%x\n", keyCode);
             fflush(stderr);
+            
+            return NULL;  // イベントを消費（システムに伝わらない）
         }
         
-        if (keyCode == kVK_F1 || keyCode == kVK_F2 || keyCode == kVK_F13 || keyCode == kVK_F14) {
+        // F1/F2キーの場合は記録のみ
+        if (keyCode == kVK_F1 || keyCode == kVK_F2) {
+            pthread_mutex_lock(&keyMutex);
             currentKey = (int32_t)keyCode;
+            pthread_mutex_unlock(&keyMutex);
             fprintf(stderr, "[KeyboardDarwin] Function key detected: keyCode=0x%x\n", keyCode);
             fflush(stderr);
         }
     } else if (type == kCGEventKeyUp) {
         CGKeyCode keyCode = (CGKeyCode)CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode);
-        if (currentKey == (int32_t)keyCode) {
+        
+        pthread_mutex_lock(&keyMutex);
+        bool wasOurKey = (currentKey == (int32_t)keyCode);
+        bool wasActive = gestureActive;
+        
+        if (wasOurKey) {
             currentKey = -1;
+            if (keyCode == kVK_F13 || keyCode == kVK_F14) {
+                gestureActive = false;
+            }
             fprintf(stderr, "[KeyboardDarwin] Function key released: keyCode=0x%x\n", keyCode);
             fflush(stderr);
         }
+        pthread_mutex_unlock(&keyMutex);
+        
+        // F13/F14キーのリリースも消費
+        if ((keyCode == kVK_F13 || keyCode == kVK_F14) && wasOurKey && wasActive) {
+            fprintf(stderr, "[KeyboardDarwin] F13/F14 KeyUp consumed\n");
+            fflush(stderr);
+            return NULL;
+        }
     }
     
-    pthread_mutex_unlock(&keyMutex);
-    
-    // イベントを通過させる
+    // その他のイベントは通過させる
     return event;
 }
 
@@ -87,7 +111,7 @@ void* runLoopThreadFunc(void* arg) {
         eventTap = CGEventTapCreate(
             kCGHIDEventTap,             // 最低レベルでタップ
             kCGHeadInsertEventTap,       // 最初に処理
-            kCGEventTapOptionListenOnly, // イベントを消費しない
+            kCGEventTapOptionDefault,    // イベントを消費可能
             eventMask,
             keyEventCallback,
             NULL

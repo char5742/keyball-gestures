@@ -515,6 +515,9 @@ func (s *GestureService) runGestureLoop() {
 			// キーボードがある場合のみ入力を取得
 			if keyboardAlive {
 				pressedKey = s.keyboard.GetKey()
+				if pressedKey != -1 && pressedKey != prevKey {
+					log.Printf("キー検出: pressedKey=%d (F14=%d, F13=%d)", pressedKey, cfg.Input.TwoFingerKey, cfg.Input.FourFingerKey)
+				}
 			}
 
 			// マウスがある場合のみ移動を取得
@@ -549,8 +552,14 @@ func (s *GestureService) runGestureLoop() {
 				if !grabbed {
 					s.statusMutex.RLock()
 					if s.mouse != nil {
-						s.mouse.Grab()
-						grabbed = true
+						log.Println("マウスをグラブしています...")
+						err := s.mouse.Grab()
+						if err != nil {
+							log.Printf("マウスのグラブに失敗: %v", err)
+						} else {
+							grabbed = true
+							log.Println("マウスのグラブに成功")
+						}
 					}
 					s.statusMutex.RUnlock()
 				}
@@ -563,8 +572,14 @@ func (s *GestureService) runGestureLoop() {
 				if !grabbed {
 					s.statusMutex.RLock()
 					if s.mouse != nil {
-						s.mouse.Grab()
-						grabbed = true
+						log.Println("マウスをグラブしています...")
+						err := s.mouse.Grab()
+						if err != nil {
+							log.Printf("マウスのグラブに失敗: %v", err)
+						} else {
+							grabbed = true
+							log.Println("マウスのグラブに成功")
+						}
 					}
 					s.statusMutex.RUnlock()
 				}
