@@ -129,6 +129,10 @@ void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPh
     CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelPhase, phase);
     CGEventSetIntegerValueField(e22, kCGEventFieldMomentumScrollPhase, momentumPhase);
     
+    // Fixed-pointデルタも設定（Safari 15以降で優先される）
+    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelFixedPtDeltaAxis1, toFixed16_16(deltaX));
+    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelFixedPtDeltaAxis2, toFixed16_16(deltaY));
+    
     // スクロールイベントはジェスチャー開始位置で発生させる
     CGEventSetLocation(e22, pos);
     
@@ -187,6 +191,9 @@ void postSwipeGesture(double deltaX, double deltaY, int phase, CGPoint pos) {
         nsEventType = NSEventTypeGestureEnd;
     }
     
+    // イベントタイプを最初に設定（重要：これを先にしないとフィールドが無視される）
+    CGEventSetType(gesture, (CGEventType)nsEventType);
+    
     // ジェスチャーイベントとして必要なフィールドをすべて設定
     CGEventSetIntegerValueField(gesture, kCGEventFieldNSEventType, nsEventType);
     CGEventSetIntegerValueField(gesture, kCGEventFieldIOHIDEventSubtype, kIOHIDEventTypeSwipe);  // スワイプ（15）
@@ -212,9 +219,6 @@ void postSwipeGesture(double deltaX, double deltaY, int phase, CGPoint pos) {
     
     // タイムスタンプを設定（必須）
     CGEventSetTimestamp(gesture, mach_absolute_time());
-    
-    // イベントタイプを設定（重要）
-    CGEventSetType(gesture, (CGEventType)nsEventType);
     
     // デバッグ: 設定した値を確認
     double checkX = CGEventGetDoubleValueField(gesture, kCGEventFieldGestureDeltaX);
@@ -526,7 +530,7 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 		// SwipeScaleFactorが設定されていない場合はデフォルト値を使用
 		scaleFactor := dt.config.SwipeScaleFactor
 		if scaleFactor == 0 {
-			scaleFactor = dt.config.MouseDeltaFactor * 0.3  // 後方互換性
+			scaleFactor = dt.config.MouseDeltaFactor * 0.01  // 後方互換性（±300pt程度）
 		}
 		scaledDeltaX := float64(filteredDeltaX) * scaleFactor
 		scaledDeltaY := float64(filteredDeltaY) * scaleFactor

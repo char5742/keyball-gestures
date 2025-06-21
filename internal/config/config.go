@@ -79,7 +79,7 @@ func DefaultConfig() *Config {
 			FilterWarmUpCount:     10,
 			MouseDeltaFactor:      15,
 			ScrollScaleFactor:     0.75,  // デフォルト: MouseDeltaFactor * 0.05 = 0.75
-			SwipeScaleFactor:      4.5,   // デフォルト: MouseDeltaFactor * 0.3 = 4.5
+			SwipeScaleFactor:      0.15,  // デフォルト: MouseDeltaFactor * 0.01 = 0.15（±300pt程度）
 		},
 		Gesture: GestureConfig{
 			ResetThreshold: 50 * time.Millisecond,
