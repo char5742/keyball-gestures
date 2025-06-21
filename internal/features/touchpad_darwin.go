@@ -6,6 +6,7 @@ package features
 import (
 	"fmt"
 	"log"
+	"math"
 	"sync"
 	"time"
 )
@@ -34,6 +35,8 @@ const int kCGEventFieldGesturePhase = 132;
 const int kCGEventFieldGestureDeltaX = 116;
 const int kCGEventFieldGestureDeltaY = 119;
 const int kCGEventFieldContinuous = 88;
+const int kCGEventFieldIOHIDEventFlags = 115;
+const int kCGEventFieldGestureMask = 134;
 
 // NSEventType定数
 const int NSEventTypeScrollWheel = 22;
@@ -43,6 +46,7 @@ const int NSEventTypeGestureEnd = 31;
 
 // IOHIDEventタイプ定数
 const int kIOHIDEventTypeScroll = 6;
+const int kIOHIDEventTypeSwipe = 15;  // Sonoma/Sequoia用のスワイプタイプ
 
 // フェーズ定数
 const int kIOHIDEventPhaseBegan = 1;
@@ -128,7 +132,7 @@ void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPh
     // スクロールイベントはジェスチャー開始位置で発生させる
     CGEventSetLocation(e22, pos);
     
-    // タイムスタンプを設定
+    // タイムスタンプを設定（必ず新しい値を取得）
     CGEventSetTimestamp(e22, mach_absolute_time());
     
     // Type 29イベント（Gesture）を作成
@@ -149,7 +153,7 @@ void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPh
     // ジェスチャーフェーズを設定
     CGEventSetIntegerValueField(e29, kCGEventFieldGesturePhase, phase);
     
-    // タイムスタンプを設定
+    // タイムスタンプを再取得（必ず新しい値を取得）
     CGEventSetTimestamp(e29, mach_absolute_time());
     
     // 両方のイベントを送信
@@ -185,7 +189,7 @@ void postSwipeGesture(double deltaX, double deltaY, int phase, CGPoint pos) {
     
     // ジェスチャーイベントとして必要なフィールドをすべて設定
     CGEventSetIntegerValueField(gesture, kCGEventFieldNSEventType, nsEventType);
-    CGEventSetIntegerValueField(gesture, kCGEventFieldIOHIDEventSubtype, 2);  // スワイプ
+    CGEventSetIntegerValueField(gesture, kCGEventFieldIOHIDEventSubtype, kIOHIDEventTypeSwipe);  // スワイプ（15）
     
     // ジェスチャーのdelta値を設定（これが最も重要）
     CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaX, deltaX);
@@ -193,6 +197,15 @@ void postSwipeGesture(double deltaX, double deltaY, int phase, CGPoint pos) {
     
     // ジェスチャーフェーズを設定
     CGEventSetIntegerValueField(gesture, kCGEventFieldGesturePhase, phase);
+    
+    // Continuousフラグを設定（トラックパッドからのジェスチャー）
+    CGEventSetIntegerValueField(gesture, kCGEventFieldContinuous, 1);
+    
+    // 4本指ジェスチャーのビットマスクを設定
+    CGEventSetIntegerValueField(gesture, kCGEventFieldGestureMask, 0x0F);  // 4本指
+    
+    // HIDフラグを設定（デジタイザーフラグ）
+    CGEventSetIntegerValueField(gesture, kCGEventFieldIOHIDEventFlags, 0x20);
     
     // ジェスチャー開始時の位置を設定（マウスカーソルを固定するため）
     CGEventSetLocation(gesture, pos);
@@ -227,6 +240,21 @@ void cleanupTouchpad() {
 */
 import "C"
 
+// ジェスチャー関連の定数
+const (
+	// スワイプ関連
+	swipeInterval  = 12 * time.Millisecond  // より高頻度のレート制限
+	swipeThreshold = 12.0                    // スワイプ認識の最小閾値（pt）
+	
+	// タイミング関連
+	gestureBeginDelay = 8 * time.Millisecond   // MayBegin→Beginの遅延
+	gestureDetectionWindow = 50 * time.Millisecond  // ジェスチャー判定ウィンドウ
+	
+	// スクロール関連
+	scrollInterval  = 12 * time.Millisecond  // スクロールのレート制限
+	scrollThreshold = 0.5                     // スクロール認識の最小閾値
+)
+
 // ジェスチャー開始位置を保存するための構造体
 type gesturePosition struct {
 	x, y C.double
@@ -253,6 +281,11 @@ type darwinTouchPad struct {
 	firstTouchTime    time.Time  // 最初のタッチの時刻
 	gestureTimer     *time.Timer  // ジェスチャー開始のタイマー
 	gestureStartPos   gesturePosition  // ジェスチャー開始時のマウス位置
+	
+	// レート制限用
+	lastSwipeSentAt  time.Time  // 最後にスワイプを送信した時刻
+	lastScrollSentAt time.Time  // 最後にスクロールを送信した時刻
+	primarySlot      int        // 代表スロット（最初のタッチ）
 }
 
 // タッチスロット情報
@@ -309,14 +342,15 @@ func (dt *darwinTouchPad) MultiTouchDown(slot int, trackingID int, x int32, y in
 	if previousCount == 0 {
 		dt.firstTouchTime = time.Now()
 		dt.pendingGesture = true
-		log.Printf("最初のタッチダウン: slot=%d", slot)
+		dt.primarySlot = slot  // 代表スロットを記録
+		log.Printf("最初のタッチダウン: slot=%d (代表スロット)", slot)
 	}
 	
 	// すべてのタッチが追加された後のアクティブなタッチ数を取得
 	activeCount := dt.getActiveTouchCount()
 	
-	// ジェスチャー判定を遅延させる（50ms以内に追加されたタッチは同時とみなす）
-	if dt.pendingGesture && time.Since(dt.firstTouchTime) < 50*time.Millisecond {
+	// ジェスチャー判定を遅延させる（gestureDetectionWindow以内に追加されたタッチは同時とみなす）
+	if dt.pendingGesture && time.Since(dt.firstTouchTime) < gestureDetectionWindow {
 		// まだジェスチャーを開始しない
 		log.Printf("タッチ追加中: activeCount=%d", activeCount)
 		return nil
@@ -338,8 +372,8 @@ func (dt *darwinTouchPad) MultiTouchDown(slot int, trackingID int, x int32, y in
 			// MayBeginフェーズを送信
 			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseMayBegin, C.kCGMomentumScrollPhaseNone, dt.gestureStartPos.toCGPoint())
 			
-			// 少し遅延を入れてからBeganフェーズを送信
-			time.Sleep(1 * time.Millisecond)
+			// 少し遅延を入れてからBeganフェーズを送信（ネイティブ間隔）
+			time.Sleep(gestureBeginDelay)
 			dt.currentScrollPhase = int(C.kIOHIDEventPhaseBegan)
 			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseBegan, C.kCGMomentumScrollPhaseNone, dt.gestureStartPos.toCGPoint())
 			
@@ -357,8 +391,8 @@ func (dt *darwinTouchPad) MultiTouchDown(slot int, trackingID int, x int32, y in
 			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseMayBegin, dt.gestureStartPos.toCGPoint())
 			log.Printf("4本指スワイプ MayBegin送信")
 			
-			// 少し遅延を入れてからBeganフェーズを送信
-			time.Sleep(1 * time.Millisecond)
+			// 少し遅延を入れてからBeganフェーズを送信（ネイティブ間隔）
+			time.Sleep(gestureBeginDelay)
 			dt.currentSwipePhase = int(C.kIOHIDEventPhaseBegan)
 			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseBegan, dt.gestureStartPos.toCGPoint())
 			
@@ -434,67 +468,94 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 		
 		// スケーリング（タッチパッド座標系からピクセルへ）
 		// mac-mouse-fixの実装に基づいて調整
-		scaleFactor := dt.config.MouseDeltaFactor * 0.1
+		scaleFactor := dt.config.MouseDeltaFactor * 0.05  // より適切な値に調整
 		scaledDeltaX := float64(filteredDeltaX) * scaleFactor
 		scaledDeltaY := float64(filteredDeltaY) * scaleFactor
 		
 		// 最小閾値を設定（小さすぎる動きは無視）
-		if abs(scaledDeltaX) > 0.1 || abs(scaledDeltaY) > 0.1 {
-			// 現在のフェーズがBeganまたはMayBeginの場合、Changedに移行
-			if dt.currentScrollPhase == int(C.kIOHIDEventPhaseBegan) ||
-			   dt.currentScrollPhase == int(C.kIOHIDEventPhaseMayBegin) {
-				dt.currentScrollPhase = int(C.kIOHIDEventPhaseChanged)
-			}
-			
-			// スクロールイベントペアを送信（mac-mouse-fix方式）
-			C.postScrollEventPair(
-				C.double(scaledDeltaX),
-				C.double(scaledDeltaY),
-				C.int(dt.currentScrollPhase),
-				C.kCGMomentumScrollPhaseNone,
-				dt.gestureStartPos.toCGPoint(),
-			)
-			
-			log.Printf("スクロール移動: dx=%.2f, dy=%.2f, phase=%d", scaledDeltaX, scaledDeltaY, dt.currentScrollPhase)
+		if abs(scaledDeltaX) < scrollThreshold && abs(scaledDeltaY) < scrollThreshold {
+			// デルタが小さすぎる場合はイベントを送信しない
+			return nil
 		}
+		
+		// レート制限チェック
+		if time.Since(dt.lastScrollSentAt) < scrollInterval {
+			// まだ送信間隔に達していない場合はスキップ
+			return nil
+		}
+		
+		dt.lastScrollSentAt = time.Now()
+		
+		// 現在のフェーズがBeganまたはMayBeginの場合、Changedに移行
+		if dt.currentScrollPhase == int(C.kIOHIDEventPhaseBegan) ||
+		   dt.currentScrollPhase == int(C.kIOHIDEventPhaseMayBegin) {
+			dt.currentScrollPhase = int(C.kIOHIDEventPhaseChanged)
+		}
+		
+		// スクロールイベントペアを送信（mac-mouse-fix方式）
+		C.postScrollEventPair(
+			C.double(scaledDeltaX),
+			C.double(scaledDeltaY),
+			C.int(dt.currentScrollPhase),
+			C.kCGMomentumScrollPhaseNone,
+			dt.gestureStartPos.toCGPoint(),
+		)
+		
+		log.Printf("スクロール移動: dx=%.2f, dy=%.2f, phase=%d", scaledDeltaX, scaledDeltaY, dt.currentScrollPhase)
 	}
 	
 	// 4本指スワイプ中の場合
 	if dt.swipeStarted && dt.getActiveTouchCount() == 4 {
+		// 代表スロット以外は無視
+		if slot != dt.primarySlot {
+			return nil
+		}
+		
 		// モーションフィルターを適用
 		filteredDeltaX, filteredDeltaY := dt.motionFilter.Filter(deltaX, deltaY)
 		
 		// スケーリング（4本指スワイプはより大きな動きが必要）
-		scaleFactor := dt.config.MouseDeltaFactor * 0.2
+		scaleFactor := dt.config.MouseDeltaFactor * 0.3  // 適切なデルタ値に調整
 		scaledDeltaX := float64(filteredDeltaX) * scaleFactor
 		scaledDeltaY := float64(filteredDeltaY) * scaleFactor
 		
 		// 最小閾値を設定（小さすぎる動きは無視）
-		if abs(scaledDeltaX) > 0.5 || abs(scaledDeltaY) > 0.5 {
-			// 現在のフェーズがBeganまたはMayBeginの場合、Changedに移行
-			if dt.currentSwipePhase == int(C.kIOHIDEventPhaseBegan) ||
-			   dt.currentSwipePhase == int(C.kIOHIDEventPhaseMayBegin) {
-				dt.currentSwipePhase = int(C.kIOHIDEventPhaseChanged)
-			}
-			
-			// スワイプイベントを送信
-			C.postSwipeGesture(
-				C.double(scaledDeltaX),
-				C.double(scaledDeltaY),
-				C.int(dt.currentSwipePhase),
-				dt.gestureStartPos.toCGPoint(),
-			)
-			
-			log.Printf("4本指スワイプ移動: dx=%.2f, dy=%.2f, phase=%d (type=%d)", scaledDeltaX, scaledDeltaY, dt.currentSwipePhase, 
-				func() int {
-					if dt.currentSwipePhase == int(C.kIOHIDEventPhaseChanged) {
-						return 30 // GestureChange
-					} else if dt.currentSwipePhase == int(C.kIOHIDEventPhaseEnded) {
-						return 31 // GestureEnd
-					}
-					return 29 // GestureBegin
-				}())
+		if math.Abs(scaledDeltaX) < swipeThreshold && math.Abs(scaledDeltaY) < swipeThreshold {
+			// デルタが小さすぎる場合はイベントを送信しない
+			return nil
 		}
+		
+		// レート制限チェック
+		if time.Since(dt.lastSwipeSentAt) < swipeInterval {
+			// まだ送信間隔に達していない場合はスキップ
+			return nil
+		}
+		
+		dt.lastSwipeSentAt = time.Now()
+		
+		// 現在のフェーズがBeganまたはMayBeginの場合、Changedに移行
+		if dt.currentSwipePhase == int(C.kIOHIDEventPhaseBegan) ||
+		   dt.currentSwipePhase == int(C.kIOHIDEventPhaseMayBegin) {
+			dt.currentSwipePhase = int(C.kIOHIDEventPhaseChanged)
+		}
+		
+		// スワイプイベントを送信
+		C.postSwipeGesture(
+			C.double(scaledDeltaX),
+			C.double(scaledDeltaY),
+			C.int(dt.currentSwipePhase),
+			dt.gestureStartPos.toCGPoint(),
+		)
+		
+		log.Printf("4本指スワイプ移動: dx=%.2f, dy=%.2f, phase=%d (type=%d)", scaledDeltaX, scaledDeltaY, dt.currentSwipePhase, 
+			func() int {
+				if dt.currentSwipePhase == int(C.kIOHIDEventPhaseChanged) {
+					return 30 // GestureChange
+				} else if dt.currentSwipePhase == int(C.kIOHIDEventPhaseEnded) {
+					return 31 // GestureEnd
+				}
+				return 29 // GestureBegin
+			}())
 	}
 
 	// 位置を更新
