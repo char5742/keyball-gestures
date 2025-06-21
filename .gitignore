@@ -8,3 +8,12 @@ test-*
 
 # macOS
 .DS_Store
+
+# テストファイル
+*.test
+integration.test
+test/debugging/a.out
+test/debugging/trackpad_dump
+test/manual/manual_touchpad
+*.log
+test/debugging/*.txt
