@@ -92,8 +92,22 @@ int initializeTouchpad() {
     return 1;
 }
 
+// 現在のマウス位置を取得
+CGPoint getCurrentMousePosition() {
+    CGEventRef event = CGEventCreate(NULL);
+    CGPoint pos = CGPointMake(0, 0);
+    if (event) {
+        pos = CGEventGetLocation(event);
+        CFRelease(event);
+    }
+    return pos;
+}
+
 // スクロールイベントを送信（修正版）
-void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPhase) {
+void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPhase, CGPoint pos) {
+    // カーソル位置を固定するため、現在位置を保存
+    CGPoint currentPos = getCurrentMousePosition();
+    
     // 標準的な方法でスクロールイベントを作成
     CGEventRef e22 = CGEventCreateScrollWheelEvent(
         _eventSource,
@@ -111,13 +125,8 @@ void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPh
     CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelPhase, phase);
     CGEventSetIntegerValueField(e22, kCGEventFieldMomentumScrollPhase, momentumPhase);
     
-    // 現在のマウス位置を設定
-    CGEventRef posEvent = CGEventCreate(NULL);
-    if (posEvent) {
-        CGPoint currentPos = CGEventGetLocation(posEvent);
-        CGEventSetLocation(e22, currentPos);
-        CFRelease(posEvent);
-    }
+    // スクロールイベントはジェスチャー開始位置で発生させる
+    CGEventSetLocation(e22, pos);
     
     // タイムスタンプを設定
     CGEventSetTimestamp(e22, mach_absolute_time());
@@ -147,12 +156,15 @@ void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPh
     CGEventPost(kCGHIDEventTap, e22);
     CGEventPost(kCGHIDEventTap, e29);
     
+    // カーソル位置を元に戻す（ジェスチャー開始位置に固定）
+    CGDisplayMoveCursorToPoint(CGMainDisplayID(), pos);
+    
     CFRelease(e22);
     CFRelease(e29);
 }
 
 // 4本指スワイプイベントを送信
-void postSwipeGesture(double deltaX, double deltaY, int phase) {
+void postSwipeGesture(double deltaX, double deltaY, int phase, CGPoint pos) {
     // デバッグ出力
     NSLog(@"postSwipeGesture: deltaX=%f, deltaY=%f, phase=%d", deltaX, deltaY, phase);
     
@@ -182,6 +194,9 @@ void postSwipeGesture(double deltaX, double deltaY, int phase) {
     // ジェスチャーフェーズを設定
     CGEventSetIntegerValueField(gesture, kCGEventFieldGesturePhase, phase);
     
+    // ジェスチャー開始時の位置を設定（マウスカーソルを固定するため）
+    CGEventSetLocation(gesture, pos);
+    
     // タイムスタンプを設定（必須）
     CGEventSetTimestamp(gesture, mach_absolute_time());
     
@@ -196,6 +211,9 @@ void postSwipeGesture(double deltaX, double deltaY, int phase) {
     // イベントを送信
     CGEventPost(kCGHIDEventTap, gesture);
     
+    // カーソル位置を元に戻す（ジェスチャー開始位置に固定）
+    CGDisplayMoveCursorToPoint(CGMainDisplayID(), pos);
+    
     CFRelease(gesture);
 }
 
@@ -208,6 +226,16 @@ void cleanupTouchpad() {
 }
 */
 import "C"
+
+// ジェスチャー開始位置を保存するための構造体
+type gesturePosition struct {
+	x, y C.double
+}
+
+// gesturePositionをC.CGPointに変換
+func (p gesturePosition) toCGPoint() C.CGPoint {
+	return C.CGPoint{x: p.x, y: p.y}
+}
 
 // macOSタッチパッド実装
 type darwinTouchPad struct {
@@ -224,6 +252,7 @@ type darwinTouchPad struct {
 	pendingGesture    bool  // ジェスチャー開始を保留中
 	firstTouchTime    time.Time  // 最初のタッチの時刻
 	gestureTimer     *time.Timer  // ジェスチャー開始のタイマー
+	gestureStartPos   gesturePosition  // ジェスチャー開始時のマウス位置
 }
 
 // タッチスロット情報
@@ -302,30 +331,38 @@ func (dt *darwinTouchPad) MultiTouchDown(slot int, trackingID int, x int32, y in
 			dt.scrollStarted = true
 			dt.currentScrollPhase = int(C.kIOHIDEventPhaseMayBegin)
 			
+			// ジェスチャー開始時のマウス位置を保存
+			cPos := C.getCurrentMousePosition()
+			dt.gestureStartPos = gesturePosition{x: cPos.x, y: cPos.y}
+			
 			// MayBeginフェーズを送信
-			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseMayBegin, C.kCGMomentumScrollPhaseNone)
+			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseMayBegin, C.kCGMomentumScrollPhaseNone, dt.gestureStartPos.toCGPoint())
 			
 			// 少し遅延を入れてからBeganフェーズを送信
 			time.Sleep(1 * time.Millisecond)
 			dt.currentScrollPhase = int(C.kIOHIDEventPhaseBegan)
-			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseBegan, C.kCGMomentumScrollPhaseNone)
+			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseBegan, C.kCGMomentumScrollPhaseNone, dt.gestureStartPos.toCGPoint())
 			
-			log.Printf("2本指スクロール開始: activeCount=%d", activeCount)
+			log.Printf("2本指スクロール開始: activeCount=%d, startPos=(%.1f,%.1f)", activeCount, float64(dt.gestureStartPos.x), float64(dt.gestureStartPos.y))
 		} else if activeCount == 4 {
 			// 4本指スワイプ開始
 			dt.swipeStarted = true
 			dt.currentSwipePhase = int(C.kIOHIDEventPhaseMayBegin)
 			
+			// ジェスチャー開始時のマウス位置を保存
+			cPos := C.getCurrentMousePosition()
+			dt.gestureStartPos = gesturePosition{x: cPos.x, y: cPos.y}
+			
 			// MayBeginフェーズを送信
-			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseMayBegin)
+			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseMayBegin, dt.gestureStartPos.toCGPoint())
 			log.Printf("4本指スワイプ MayBegin送信")
 			
 			// 少し遅延を入れてからBeganフェーズを送信
 			time.Sleep(1 * time.Millisecond)
 			dt.currentSwipePhase = int(C.kIOHIDEventPhaseBegan)
-			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseBegan)
+			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseBegan, dt.gestureStartPos.toCGPoint())
 			
-			log.Printf("4本指スワイプ開始: activeCount=%d, phase=Began", activeCount)
+			log.Printf("4本指スワイプ開始: activeCount=%d, phase=Began, startPos=(%.1f,%.1f)", activeCount, float64(dt.gestureStartPos.x), float64(dt.gestureStartPos.y))
 		}
 	}
 
@@ -361,24 +398,32 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 			dt.scrollStarted = true
 			dt.currentScrollPhase = int(C.kIOHIDEventPhaseMayBegin)
 			
-			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseMayBegin, C.kCGMomentumScrollPhaseNone)
+			// ジェスチャー開始時のマウス位置を保存
+			cPos := C.getCurrentMousePosition()
+			dt.gestureStartPos = gesturePosition{x: cPos.x, y: cPos.y}
+			
+			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseMayBegin, C.kCGMomentumScrollPhaseNone, dt.gestureStartPos.toCGPoint())
 			time.Sleep(1 * time.Millisecond)
 			dt.currentScrollPhase = int(C.kIOHIDEventPhaseBegan)
-			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseBegan, C.kCGMomentumScrollPhaseNone)
+			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseBegan, C.kCGMomentumScrollPhaseNone, dt.gestureStartPos.toCGPoint())
 			
-			log.Printf("2本指スクロール開始（移動時）: activeCount=%d", activeCount)
+			log.Printf("2本指スクロール開始（移動時）: activeCount=%d, startPos=(%.1f,%.1f)", activeCount, float64(dt.gestureStartPos.x), float64(dt.gestureStartPos.y))
 		} else if activeCount == 4 && !dt.scrollStarted && !dt.swipeStarted {
 			// 4本指スワイプ開始
 			dt.swipeStarted = true
 			dt.currentSwipePhase = int(C.kIOHIDEventPhaseMayBegin)
 			
-			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseMayBegin)
+			// ジェスチャー開始時のマウス位置を保存
+			cPos := C.getCurrentMousePosition()
+			dt.gestureStartPos = gesturePosition{x: cPos.x, y: cPos.y}
+			
+			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseMayBegin, dt.gestureStartPos.toCGPoint())
 			log.Printf("4本指スワイプ MayBegin送信（移動時）")
 			time.Sleep(1 * time.Millisecond)
 			dt.currentSwipePhase = int(C.kIOHIDEventPhaseBegan)
-			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseBegan)
+			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseBegan, dt.gestureStartPos.toCGPoint())
 			
-			log.Printf("4本指スワイプ開始（移動時）: activeCount=%d, phase=Began", activeCount)
+			log.Printf("4本指スワイプ開始（移動時）: activeCount=%d, phase=Began, startPos=(%.1f,%.1f)", activeCount, float64(dt.gestureStartPos.x), float64(dt.gestureStartPos.y))
 		}
 	}
 
@@ -407,6 +452,7 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 				C.double(scaledDeltaY),
 				C.int(dt.currentScrollPhase),
 				C.kCGMomentumScrollPhaseNone,
+				dt.gestureStartPos.toCGPoint(),
 			)
 			
 			log.Printf("スクロール移動: dx=%.2f, dy=%.2f, phase=%d", scaledDeltaX, scaledDeltaY, dt.currentScrollPhase)
@@ -436,6 +482,7 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 				C.double(scaledDeltaX),
 				C.double(scaledDeltaY),
 				C.int(dt.currentSwipePhase),
+				dt.gestureStartPos.toCGPoint(),
 			)
 			
 			log.Printf("4本指スワイプ移動: dx=%.2f, dy=%.2f, phase=%d (type=%d)", scaledDeltaX, scaledDeltaY, dt.currentSwipePhase, 
@@ -479,7 +526,7 @@ func (dt *darwinTouchPad) MultiTouchUp(slot int) error {
 	if activeCount == 0 {
 		if dt.scrollStarted {
 			// スクロール終了イベントを送信
-			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseEnded, C.kCGMomentumScrollPhaseNone)
+			C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseEnded, C.kCGMomentumScrollPhaseNone, dt.gestureStartPos.toCGPoint())
 			
 			dt.scrollStarted = false
 			dt.currentScrollPhase = 0
@@ -492,7 +539,7 @@ func (dt *darwinTouchPad) MultiTouchUp(slot int) error {
 		
 		if dt.swipeStarted {
 			// スワイプ終了イベントを送信
-			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseEnded)
+			C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseEnded, dt.gestureStartPos.toCGPoint())
 			
 			dt.swipeStarted = false
 			dt.currentSwipePhase = 0
@@ -520,10 +567,10 @@ func (dt *darwinTouchPad) Close() error {
 
 	// アクティブなジェスチャーがある場合は終了
 	if dt.scrollStarted {
-		C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseEnded, C.kCGMomentumScrollPhaseNone)
+		C.postScrollEventPair(0, 0, C.kIOHIDEventPhaseEnded, C.kCGMomentumScrollPhaseNone, dt.gestureStartPos.toCGPoint())
 	}
 	if dt.swipeStarted {
-		C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseEnded)
+		C.postSwipeGesture(0, 0, C.kIOHIDEventPhaseEnded, dt.gestureStartPos.toCGPoint())
 	}
 
 	// Cリソースをクリーンアップ
