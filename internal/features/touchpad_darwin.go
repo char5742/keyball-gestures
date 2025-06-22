@@ -205,9 +205,9 @@ void postSwipeGesture(double deltaX, double deltaY, int phase, CGPoint pos, doub
     // subtype=23 (Swipe) 固定
     CGEventSetIntegerValueField(gesture, kCGEventFieldIOHIDEventSubtype, kIOHIDEventSubtypeSwipeNew);
     
-    // delta値は常に0（ネイティブログ準拠）
-    CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaX, 0.0);
-    CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaY, 0.0);
+    // delta値を設定（Mission Control動作のため実際の値を使用）
+    CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaX, deltaX);
+    CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaY, deltaY);
     
     // ジェスチャーフェーズを設定
     CGEventSetIntegerValueField(gesture, kCGEventFieldGesturePhase, phase);
@@ -545,6 +545,17 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 			return nil
 		}
 		
+		// モーションフィルターを適用
+		filteredDeltaX, filteredDeltaY := dt.motionFilter.Filter(deltaX, deltaY)
+		
+		// スケーリング（タッチパッド座標系からピクセルへ）
+		scaleFactor := dt.config.SwipeScaleFactor
+		if scaleFactor == 0 {
+			scaleFactor = 0.5  // デフォルト値（Mission Control動作用）
+		}
+		scaledDeltaX := float64(filteredDeltaX) * scaleFactor
+		scaledDeltaY := float64(filteredDeltaY) * scaleFactor
+		
 		// レート制限チェック
 		if time.Since(dt.lastSwipeSentAt) < swipeInterval {
 			// まだ送信間隔に達していない場合はスキップ
@@ -558,15 +569,16 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 			dt.currentSwipePhase = int(C.kIOHIDEventPhaseChanged)
 		}
 		
-		// スワイプイベントを送信（ネイティブ準拠：デルタは常に0）
+		// スワイプイベントを送信（デルタ値を含む）
 		C.postSwipeGesture(
-			0, 0,  // ネイティブログ準拠
+			C.double(scaledDeltaX),
+			C.double(scaledDeltaY),
 			C.int(dt.currentSwipePhase),
 			dt.gestureStartPos.toCGPoint(),
 			0, 0,  // 累積は使わない
 		)
 		
-		log.Printf("4本指スワイプ移動: phase=%d", dt.currentSwipePhase)
+		log.Printf("4本指スワイプ移動: Δ(%.1f,%.1f), phase=%d", scaledDeltaX, scaledDeltaY, dt.currentSwipePhase)
 	}
 
 	// 位置を更新
