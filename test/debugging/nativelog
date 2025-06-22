@@ -1,0 +1,90 @@
+# trackpad_dumpで取得したログ
+
+# ネイティブトラックパッドの2本指スクロールのログ
+=== CGEvent dump v2 ===
+Listening…  Ctrl+C to quit
+[39176.269] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.280] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.288] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.296] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.305] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.323] Scroll ? Δ(-1.0,0.0)
+[39176.323] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.323] Gesture type=29(Begin) sub=6(Scroll) phase=Began mask=0 flags=0x80000000
+          Δ(-0.0,-1.0)
+[39176.335] Scroll ? Δ(-3.0,0.0)
+[39176.335] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.335] Gesture type=29(Begin) sub=6(Scroll) phase=Changed mask=0 flags=0x80000000
+          Δ(-0.0,-9.0)
+[39176.351] Scroll ? Δ(-9.0,1.0)
+[39176.351] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.351] Gesture type=29(Begin) sub=6(Scroll) phase=Changed mask=0 flags=0x40000000
+          Δ(2.0,-22.0)
+[39176.368] Scroll ? Δ(-9.0,1.0)
+[39176.368] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.368] Gesture type=29(Begin) sub=6(Scroll) phase=Changed mask=0 flags=0x3F800000
+          Δ(1.0,-24.0)
+[39176.385] Scroll ? Δ(-7.0,1.0)
+[39176.385] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.385] Gesture type=29(Begin) sub=6(Scroll) phase=Changed mask=0 flags=0x40000000
+          Δ(2.0,-19.0)
+[39176.402] Scroll ? Δ(-6.0,1.0)
+[39176.401] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.401] Gesture type=29(Begin) sub=6(Scroll) phase=Changed mask=0 flags=0x3F800000
+          Δ(1.0,-16.0)
+[39176.418] Scroll ? Δ(-5.0,1.0)
+[39176.418] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.418] Gesture type=29(Begin) sub=6(Scroll) phase=Changed mask=0 flags=0x3F800000
+          Δ(1.0,-14.0)
+[39176.435] Scroll ? Δ(-3.0,1.0)
+[39176.435] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.435] Gesture type=29(Begin) sub=6(Scroll) phase=Changed mask=0 flags=0x3F800000
+          Δ(1.0,-8.0)
+[39176.435] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.452] Scroll ? Δ(-1.0,1.0)
+[39176.451] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.451] Gesture type=29(Begin) sub=6(Scroll) phase=Changed mask=0 flags=0x3F800000
+          Δ(1.0,-2.0)
+[39176.459] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.468] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.468] Scroll ? Δ(-1.0,0.0)
+[39176.468] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.468] Gesture type=29(Begin) sub=6(Scroll) phase=Changed mask=0 flags=0x80000000
+          Δ(-0.0,-1.0)
+[39176.476] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.484] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.492] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.500] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.508] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.516] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.532] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.535] Scroll ? Δ(0.0,0.0)
+[39176.535] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39176.535] Gesture type=29(Begin) sub=6(Scroll) phase=Ended mask=0 flags=0x80000000
+
+4本指操作のログ
+[39144.064] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39144.072] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39144.087] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39144.087] Gesture type=30(Change) sub=23(Swipe) phase=Began mask=0x1 [Began ] flags=0x0
+          Δ(0.0,0.0)
+[39144.105] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39144.105] Gesture type=30(Change) sub=23(Swipe) phase=Changed mask=0x2 [Changed ] flags=0x8
+          Δ(0.0,0.0)
+[39144.118] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39144.118] Gesture type=30(Change) sub=23(Swipe) phase=Changed mask=0x2 [Changed ] flags=0x0
+          Δ(0.0,0.0)
+[39144.139] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39144.139] Gesture type=30(Change) sub=23(Swipe) phase=Changed mask=0x2 [Changed ] flags=0x0
+          Δ(0.0,0.0)
+[39144.151] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39144.151] Gesture type=30(Change) sub=23(Swipe) phase=Changed mask=0x2 [Changed ] flags=0x0
+          Δ(0.0,0.0)
+[39144.169] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39144.169] Gesture type=30(Change) sub=23(Swipe) phase=Changed mask=0x2 [Changed ] flags=0x0
+          Δ(0.0,0.0)
+[39144.169] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39144.169] Gesture type=30(Change) sub=23(Swipe) phase=Ended mask=0x4 [0x4 ] flags=0x0
+          Δ(0.0,0.0)
+[39144.169] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0
+[39145.466] Gesture type=29(Begin) sub=0(?) phase=? mask=0 flags=0x0

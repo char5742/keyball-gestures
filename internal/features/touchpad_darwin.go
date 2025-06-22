@@ -205,9 +205,9 @@ void postSwipeGesture(double deltaX, double deltaY, int phase, CGPoint pos, doub
     // subtype=23 (Swipe) 固定
     CGEventSetIntegerValueField(gesture, kCGEventFieldIOHIDEventSubtype, kIOHIDEventSubtypeSwipeNew);
     
-    // delta値を設定（GestureDeltaフィールドは0だが、実際の動きを伝える）
-    CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaX, deltaX);
-    CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaY, deltaY);
+    // delta値は常に0（ネイティブログ準拠）
+    CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaX, 0.0);
+    CGEventSetDoubleValueField(gesture, kCGEventFieldGestureDeltaY, 0.0);
     
     // ジェスチャーフェーズを設定
     CGEventSetIntegerValueField(gesture, kCGEventFieldGesturePhase, phase);
@@ -218,9 +218,19 @@ void postSwipeGesture(double deltaX, double deltaY, int phase, CGPoint pos, doub
     // フェーズマスクを設定（phase bit表現）
     CGEventSetIntegerValueField(gesture, kCGEventFieldGestureMask, phaseMask);
     
-    // IOHIDEventFlags: Began=0x1, Cancel=0x8, それ以外0
-    int flags = (phase == kIOHIDEventPhaseBegan) ? 0x1 :
-                (phase == kIOHIDEventPhaseCancelled) ? 0x8 : 0;
+    // IOHIDEventFlags: ネイティブログに基づく設定
+    // Began=0x0, 最初のChanged=0x8, Cancel=0x8, それ以外0
+    static int isFirstChanged = 1;
+    if (phase == kIOHIDEventPhaseBegan) {
+        isFirstChanged = 1;  // リセット
+    }
+    int flags = 0;
+    if (phase == kIOHIDEventPhaseChanged && isFirstChanged) {
+        flags = 0x8;
+        isFirstChanged = 0;
+    } else if (phase == kIOHIDEventPhaseCancelled) {
+        flags = 0x8;
+    }
     CGEventSetIntegerValueField(gesture, kCGEventFieldIOHIDEventFlags, flags);
     
     // ジェスチャー開始時の位置を設定（マウスカーソルを固定するため）
@@ -548,27 +558,15 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 			dt.currentSwipePhase = int(C.kIOHIDEventPhaseChanged)
 		}
 		
-		// モーションフィルターを適用
-		filteredDeltaX, filteredDeltaY := dt.motionFilter.Filter(deltaX, deltaY)
-		
-		// スケーリング（タッチパッド座標系からピクセルへ）
-		scaleFactor := dt.config.SwipeScaleFactor
-		if scaleFactor == 0 {
-			scaleFactor = 0.3  // デフォルト値（Mission Control動作用）
-		}
-		scaledDeltaX := float64(filteredDeltaX) * scaleFactor
-		scaledDeltaY := float64(filteredDeltaY) * scaleFactor
-		
-		// スワイプイベントを送信
+		// スワイプイベントを送信（ネイティブ準拠：デルタは常に0）
 		C.postSwipeGesture(
-			C.double(scaledDeltaX),
-			C.double(scaledDeltaY),
+			0, 0,  // ネイティブログ準拠
 			C.int(dt.currentSwipePhase),
 			dt.gestureStartPos.toCGPoint(),
 			0, 0,  // 累積は使わない
 		)
 		
-		log.Printf("4本指スワイプ移動: Δ(%.1f,%.1f), phase=%d", scaledDeltaX, scaledDeltaY, dt.currentSwipePhase)
+		log.Printf("4本指スワイプ移動: phase=%d", dt.currentSwipePhase)
 	}
 
 	// 位置を更新
