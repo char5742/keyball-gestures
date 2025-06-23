@@ -109,29 +109,50 @@ CGPoint getCurrentMousePosition() {
 
 // スクロールイベントを送信（修正版）
 void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPhase, CGPoint pos) {
+    // ネイティブログのパターンに従って、最初にtype=29 sub=0のダミーイベントを送信
+    CGEventRef dummy = CGEventCreate(_eventSource);
+    if (dummy) {
+        CGEventSetType(dummy, (CGEventType)NSEventTypeGesture);
+        CGEventSetIntegerValueField(dummy, kCGEventFieldNSEventType, NSEventTypeGesture);
+        CGEventSetIntegerValueField(dummy, kCGEventFieldIOHIDEventSubtype, 0);
+        CGEventSetIntegerValueField(dummy, kCGEventFieldIOHIDEventFlags, 0);
+        CGEventSetTimestamp(dummy, mach_absolute_time());
+        CGEventPost(kCGSessionEventTap, dummy);
+        CFRelease(dummy);
+    }
+    
     // カーソル位置を固定するため、現在位置を保存
     CGPoint currentPos = getCurrentMousePosition();
     
     // 標準的な方法でスクロールイベントを作成
+    // Axis1=垂直(Y), Axis2=水平(X)
     CGEventRef e22 = CGEventCreateScrollWheelEvent(
         _eventSource,
         kCGScrollEventUnitPixel,
-        2,  // 2軸（Y, X）
-        (int32_t)deltaY,
-        (int32_t)deltaX
+        2,  // 2軸
+        (int32_t)round(deltaY),  // Axis1 = 垂直
+        (int32_t)round(deltaX)   // Axis2 = 水平
     );
     if (!e22) return;
     
     // トラックパッドからのイベントであることを示す
     CGEventSetIntegerValueField(e22, kCGEventFieldContinuous, 1);
     
+    // Line units deltaも設定（CGEventCreateScrollWheelEventで自動設定されるが念のため）
+    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelDeltaAxis1, (int64_t)round(deltaY));  // Axis1 = 垂直
+    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelDeltaAxis2, (int64_t)round(deltaX));  // Axis2 = 水平
+    
     // フェーズを設定
     CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelPhase, phase);
     CGEventSetIntegerValueField(e22, kCGEventFieldMomentumScrollPhase, momentumPhase);
     
-    // Fixed-pointデルタも設定（Safari 15以降で優先される）
-    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelFixedPtDeltaAxis1, toFixed16_16(deltaX));
-    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelFixedPtDeltaAxis2, toFixed16_16(deltaY));
+    // Point delta値を設定（ピクセル単位）
+    CGEventSetDoubleValueField(e22, kCGEventFieldScrollWheelPointDeltaAxis1, deltaY);  // Axis1 = 垂直
+    CGEventSetDoubleValueField(e22, kCGEventFieldScrollWheelPointDeltaAxis2, deltaX);  // Axis2 = 水平
+    
+    // Fixed-pointデルタも設定（16.16形式）
+    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelFixedPtDeltaAxis1, toFixed16_16(deltaY));  // Axis1 = 垂直
+    CGEventSetIntegerValueField(e22, kCGEventFieldScrollWheelFixedPtDeltaAxis2, toFixed16_16(deltaX));  // Axis2 = 水平
     
     // スクロールイベントはジェスチャー開始位置で発生させる
     CGEventSetLocation(e22, pos);
@@ -156,6 +177,21 @@ void postScrollEventPair(double deltaX, double deltaY, int phase, int momentumPh
     
     // ジェスチャーフェーズを設定
     CGEventSetIntegerValueField(e29, kCGEventFieldGesturePhase, phase);
+    
+    // フラグを適切に設定（ネイティブログと同じ値）
+    uint32_t flags = 0x80000000;  // デフォルト
+    if (phase == kIOHIDEventPhaseChanged) {
+        // 変化の大きさに応じてフラグを設定
+        if (fabs(deltaX) > 5.0 || fabs(deltaY) > 5.0) {
+            flags = 0x40000000;
+        } else {
+            flags = 0x3F800000;
+        }
+    }
+    CGEventSetIntegerValueField(e29, kCGEventFieldIOHIDEventFlags, flags);
+    
+    // イベント位置を設定
+    CGEventSetLocation(e29, pos);
     
     // タイムスタンプを再取得（必ず新しい値を取得）
     CGEventSetTimestamp(e29, mach_absolute_time());
@@ -271,15 +307,15 @@ import "C"
 // ジェスチャー関連の定数
 const (
 	// スワイプ関連
-	swipeInterval  = 12 * time.Millisecond  // より高頻度のレート制限
+	swipeInterval  = 8 * time.Millisecond  // 120Hz相当のレート制限
 	
 	// タイミング関連
 	gestureBeginDelay = 8 * time.Millisecond   // MayBegin→Beginの遅延
 	gestureDetectionWindow = 50 * time.Millisecond  // ジェスチャー判定ウィンドウ
 	
 	// スクロール関連
-	scrollInterval  = 12 * time.Millisecond  // スクロールのレート制限
-	scrollThreshold = 0.5                     // スクロール認識の最小閾値
+	scrollInterval  = 8 * time.Millisecond  // 120Hz相当のレート制限
+	scrollThreshold = 0.01                    // スクロール認識の最小閾値（非常に小さな動きも検出）
 )
 
 // ジェスチャー開始位置を保存するための構造体
@@ -498,10 +534,10 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 		filteredDeltaX, filteredDeltaY := dt.motionFilter.Filter(deltaX, deltaY)
 		
 		// スケーリング（タッチパッド座標系からピクセルへ）
-		// ScrollScaleFactorが設定されていない場合はデフォルト値を使用
+		// ネイティブログに近い値に調整
 		scaleFactor := dt.config.ScrollScaleFactor
 		if scaleFactor == 0 {
-			scaleFactor = dt.config.MouseDeltaFactor * 0.05  // 後方互換性
+			scaleFactor = 0.25  // デフォルト値を調整（0.25〜0.3が適切）
 		}
 		scaledDeltaX := float64(filteredDeltaX) * scaleFactor
 		scaledDeltaY := float64(filteredDeltaY) * scaleFactor
@@ -520,9 +556,8 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 		
 		dt.lastScrollSentAt = time.Now()
 		
-		// 現在のフェーズがBeganまたはMayBeginの場合、Changedに移行
-		if dt.currentScrollPhase == int(C.kIOHIDEventPhaseBegan) ||
-		   dt.currentScrollPhase == int(C.kIOHIDEventPhaseMayBegin) {
+		// 現在のフェーズがChangedでない場合、Changedに移行（毎フレームBegan/Endedを繰り返さない）
+		if dt.currentScrollPhase != int(C.kIOHIDEventPhaseChanged) {
 			dt.currentScrollPhase = int(C.kIOHIDEventPhaseChanged)
 		}
 		
@@ -564,8 +599,8 @@ func (dt *darwinTouchPad) MultiTouchMove(slot int, x int32, y int32) error {
 		
 		dt.lastSwipeSentAt = time.Now()
 		
-		// 現在のフェーズがBeganの場合、Changedに移行
-		if dt.currentSwipePhase == int(C.kIOHIDEventPhaseBegan) {
+		// 現在のフェーズがChangedでない場合、Changedに移行
+		if dt.currentSwipePhase != int(C.kIOHIDEventPhaseChanged) {
 			dt.currentSwipePhase = int(C.kIOHIDEventPhaseChanged)
 		}
 		
